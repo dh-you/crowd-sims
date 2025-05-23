@@ -84,7 +84,7 @@ function init() {
     // axes
     // scene.add(new THREE.AxesHelper(40));
     const loader = new THREE.TextureLoader();
-    const texture = loader.load('resources/OIP.jpg');
+    const texture = loader.load('../resources/OIP.jpg');
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
     texture.magFilter = THREE.NearestFilter;
