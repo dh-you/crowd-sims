@@ -1,11 +1,15 @@
 const K = 2;
 const MAXFORCE = 75;
 const HORIZON = 50;
-const EPSILON = 0.001;
 const TIMESTEP = 0.005;
+const EPSILON = 0.001;
 
 function dot2(a, b) {
     return a[0] * b[0] + a[1] * b[1];
+}
+
+function magnitude(a) {
+    return Math.sqrt(a[0]**2 + a[1]**2);
 }
 
 function timeToCollision(agent, neighbor) {
@@ -29,8 +33,24 @@ function timeToCollision(agent, neighbor) {
     return tau;
 }
 
-export function magnitude(x, y) {
-    return Math.sqrt(x**2 + y**2);
+export function applyForce(agent, f) {
+    let force = magnitude(f);
+    if (force > MAXFORCE) {
+        f[0] = MAXFORCE * f[0] / force;
+        f[1] = MAXFORCE * f[1] / force;
+    }
+
+    agent.vx += f[0] * TIMESTEP;
+    agent.vz += f[1] * TIMESTEP;
+
+    let speed = magnitude([agent.vx, agent.vz]);
+    if (speed > agent.maxSpeed) {
+        agent.vx = agent.maxSpeed * agent.vx / speed;
+        agent.vz = agent.maxSpeed * agent.vz / speed;
+    }
+
+    agent.x += agent.vx * TIMESTEP;
+    agent.z += agent.vz * TIMESTEP;
 }
 
 export function update(agent, agents) {
@@ -64,21 +84,5 @@ export function update(agent, agents) {
     let fx = fxGoal + fxAvoid;
     let fz = fzGoal + fzAvoid;
 
-    let force = magnitude(fx, fz);
-    if (force > MAXFORCE) {
-        fx = MAXFORCE * fx / force;
-        fz = MAXFORCE * fz / force;
-    }
-
-    agent.vx += fx * TIMESTEP;
-    agent.vz += fz * TIMESTEP;
-
-    let speed = magnitude(agent.vx, agent.vz);
-    if (speed > agent.maxSpeed) {
-        agent.vx = agent.maxSpeed * agent.vx / speed;
-        agent.vz = agent.maxSpeed * agent.vz / speed;
-    }
-
-    agent.x += agent.vx * TIMESTEP;
-    agent.z += agent.vz * TIMESTEP;
+    applyForce(agent, [fx, fz]);
 }

@@ -12,23 +12,60 @@ let world = {
     z: LENGTH
 };
 
-let agents = [];
-const COUNT = 125;
+let pickableObjects = [];
+let selected = null;
+let mouse = new THREE.Vector2();
+const raycaster = new THREE.Raycaster();
+
+const COUNT = 100;
 const RADIUS = 1;
 const MAXSPEED = 7.5;
-const agentMat = new THREE.MeshLambertMaterial({
+const COMFORT = 15;
+
+let performer = {
+    id : -1,
+    x: 0,
+    y: 2,
+    z: 45,
+    vx: 0,
+    vy: 0,
+    vz: 0,
+    gx: 0,
+    gy: 0,
+    gz: 0,
+    tx: 0,
+    ty: 2,
+    tz: 45,
+    radius: RADIUS,
+    maxSpeed: MAXSPEED,
+    isWatching: false,
+};
+let agents = [performer];
+
+const pedestrianMat = new THREE.MeshLambertMaterial({
     color: 0x00ff00
+});
+const onlookerMat = new THREE.MeshLambertMaterial({
+    color: 0x0000ff
+});
+const performerMat = new THREE.MeshLambertMaterial({
+    color: 0xff0000
 });
 
 init();
 render();
 
 function getPostition() {
-    return [Math.random() * 20 - 50, Math.random() * 100 - 50];
+    return [Math.random() * 90 - 45, Math.random() * 30 - 15];
 }
 
 function getVelocity() {
     return Math.random() - 0.5;
+}
+
+function generateViewingPosition() {
+    let theta = Math.random() * Math.PI + Math.PI;
+    return [performer.x + COMFORT * Math.cos(theta), performer.z + COMFORT * Math.sin(theta)];
 }
 
 function init() {
@@ -101,89 +138,86 @@ function init() {
     grid.rotation.x = -Math.PI / 2;
     scene.add(grid);
 
-    // walls 
-    const wallMaterial = new THREE.MeshBasicMaterial({color: 0x36454F, side: THREE.DoubleSide});
-    const walkwayMaterial = new THREE.MeshBasicMaterial({color: 0x000000, side: THREE.DoubleSide});
+    // street 
+    const streetMaterial = new THREE.MeshBasicMaterial({color: 0x222222, side: THREE.DoubleSide});
+    const streetGeometry = new THREE.PlaneGeometry(100, 30);
+    const streetPlane = new THREE.Mesh(streetGeometry, streetMaterial);
+    streetPlane.castShadow = true;
+    streetPlane.receiveShadow = true;
+    streetPlane.rotation.set(Math.PI / 2, 0, 0);
+    streetPlane.position.set(0, 0.05, 0);
+    scene.add(streetPlane);
 
-    const geometry10 = new THREE.PlaneGeometry(60, 2);
-    const plane10 = new THREE.Mesh(geometry10, wallMaterial);
-    plane10.rotation.set(Math.PI, 0, 0);
-    plane10.position.set(0, 1, 15);
-    scene.add(plane10);
+    // wall
+    const wallMaterial = new THREE.MeshBasicMaterial({color: 0x231709, side: THREE.DoubleSide});
+    const wallGeometry = new THREE.PlaneGeometry(100, 10);
+    const wallPlane = new THREE.Mesh(wallGeometry, wallMaterial);
+    wallPlane.receiveShadow = true;
+    wallPlane.rotation.set(Math.PI, 0, 0);
+    wallPlane.position.set(0, 5, 50);
+    scene.add(wallPlane);
 
-    const geometry11 = new THREE.PlaneGeometry(60, 2);
-    const plane11 = new THREE.Mesh(geometry11, wallMaterial);
-    plane11.rotation.set(Math.PI, 0, 0);
-    plane11.position.set(0, 1, 10);
-    scene.add(plane11);
-
-    const geometry12 = new THREE.PlaneGeometry(60, 5);
-    const plane12 = new THREE.Mesh(geometry12, walkwayMaterial);
-    plane12.castShadow = true;
-    plane12.receiveShadow = true;
-    plane12.rotation.set(Math.PI / 2, 0, 0);
-    plane12.position.set(0, 0.05, 12.5);
-    scene.add(plane12);
-
-    const geometry13 = new THREE.PlaneGeometry(60, 2);
-    const plane13 = new THREE.Mesh(geometry13, wallMaterial);
-    plane13.rotation.set(Math.PI, 0, 0);
-    plane13.position.set(0, 1, -10);
-    scene.add(plane13);
-
-    const geometry14 = new THREE.PlaneGeometry(60, 2);
-    const plane14 = new THREE.Mesh(geometry14, wallMaterial);
-    plane14.rotation.set(Math.PI, 0, 0);
-    plane14.position.set(0, 1, -15);
-    scene.add(plane14);
-
-    const geometry15 = new THREE.PlaneGeometry(60, 5);
-    const plane15 = new THREE.Mesh(geometry15, walkwayMaterial);
-    plane15.castShadow = true;
-    plane15.receiveShadow = true;
-    plane15.rotation.set(Math.PI / 2, 0, 0);
-    plane15.position.set(0, 0.05, -12.5);
-    scene.add(plane15);
-
-    for (let i = 0; i < COUNT; i++) {
+    let agentGeometry, agent;
+    for (let i = 1; i < COUNT; i++) {
         let vx = getVelocity();
         let vy = getVelocity();
         let vz = getVelocity();
 
-        let z = getPostition()[1];
+        let pos = getPostition();
 
         agents.push({
             id : i,
-            x: getPostition()[0],
+            x: pos[0],
             y: 2,
-            z: z,
+            z: pos[1],
             vx: vx,
             vy: vy,
             vz: vz,
             gx: vx,
             gy: vy,
             gz: vz,
-            tx: 0,
+            tx: 50 * (Math.random() < 0.5 ? -1 : 1),
             ty: 2,
-            tz: z,
+            tz: pos[1],
             radius: RADIUS,
             maxSpeed: MAXSPEED,
+            isWatching: false,
         })
-    }
 
-    let agentGeometry, agentMaterial, agent;
-
-    agents.forEach(function(member) {
-        agentGeometry = new THREE.CylinderGeometry(member.radius, 1, 4, 16);
-        agentMaterial = new THREE.MeshLambertMaterial({
-            color: 0x00ff00
-        });
-        agent = new THREE.Mesh(agentGeometry, agentMaterial);
+        agentGeometry = new THREE.CylinderGeometry(RADIUS, 1, 4, 16);
+        agent = new THREE.Mesh(agentGeometry, pedestrianMat);
         agent.castShadow = true;
         agent.receiveShadow = true;
+        agent.userData = {
+            "id": agents[i].id
+        };
         scene.add(agent);
-        member.agent = agent;
-    });
+        agents[i].agent = agent;
+        pickableObjects.push(agent);
+    }
+
+    // performer
+    agent = new THREE.Mesh(agentGeometry, pedestrianMat);
+    agent.castShadow = true;
+    agent.receiveShadow = true;
+    agent.userData = {
+        "id": agents[0].id
+    };
+    scene.add(agent);
+    agents[0].agent = agent;
+
+    window.addEventListener("mousedown", mouseDown, false);
+}
+
+function mouseDown(event) {
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    selected = null;
+    var intersects = raycaster.intersectObjects(pickableObjects, false);
+    for (var i = 0; i < intersects.length; i++) {
+        selected = intersects[i].object.userData.id;
+    }
 }
 
 function render() {
@@ -194,79 +228,30 @@ function animate() {
     requestAnimationFrame(animate);
 
     agents.forEach(function(member) {
+        // wrap around
+        if (member.x < -50 + RADIUS) { 
+            member.x = 50 - RADIUS;
+            member.z *= -1;
+        } else if (member.x > 50 - RADIUS) {
+            member.x = -50 + RADIUS;
+            member.z *= -1;
+        }
+
+        // prevent clipping into wall
+        if (member.z > 50 - RADIUS) {
+            member.z = 50 - RADIUS;
+        }
+
+        // pick onlookers
+        if (selected != null && member.id == selected) {
+            member.isWatching = true;
+            [member.tx, member.tz] = generateViewingPosition();
+        }
+
         member.agent.position.x = member.x;
         member.agent.position.y = member.y;
         member.agent.position.z = member.z;
-        member.agent.material = agentMat;
-
-        if (member.z > LENGTH / 2 - RADIUS) {
-            member.z = LENGTH / 2 - RADIUS;
-        } else if (member.z < -LENGTH / 2 + RADIUS) {
-            member.z = -LENGTH / 2 + RADIUS;
-        }
-
-        if (member.z < 0) {
-            member.tz = -12.5;
-        } else {
-            member.tz = 12.5;
-        }
-
-        member.tx = -32.5;
-        member.maxSpeed = MAXSPEED;
-
-        if (member.x >= -30 && member.x <= 30) {
-            if (member.z < 0) {
-                if (member.z > -15 && member.z < -10) {
-                    member.maxSpeed = MAXSPEED * 1.5;
-
-                    if (member.z < -15 + RADIUS) {
-                        member.z = -15 + RADIUS;
-                    } else if (member.z > -10 - RADIUS) {
-                        member.z = -10 - RADIUS;
-                    }
-                    
-                } else {
-                    if (member.z < -12.5 && member.z > -15 - RADIUS) {
-                        member.z = -15 - RADIUS;
-                    } else if (member.z > -12.5 && member.z < -10 + RADIUS) {
-                        member.z = -10 + RADIUS;
-                    }
-                } 
-            } else {
-                if (member.z > 10 && member.z < 15) {
-                    member.maxSpeed = MAXSPEED * 1.5;
-
-                    if (member.z < 10 + RADIUS) {
-                        member.z = 10 + RADIUS;
-                    } else if (member.z > 15 - RADIUS) {
-                        member.z = 15 - RADIUS;
-                    }
-
-                } else {
-                    if (member.z > 12.5 && member.z < 15 + RADIUS) {
-                        member.z = 15 + RADIUS;
-                    } else if (member.z < 12.5 && member.z > 10 - RADIUS) {
-                        member.z = 10 - RADIUS;
-                    }
-                }
-            }
-        }
-
-        if (Math.abs(member.x + 32.5) <= 7.5 && member.z > -15 && member.z < -10) {
-            member.tx = 200;
-        } else if (Math.abs(member.x + 32.5) <= 7.5 && member.z > 10 && member.z < 15) {
-            member.tx = 200;
-        }
-
-        if (member.x >= -30 && member.z > -15 && member.z < -10) {
-            member.tx = 200;
-        } else if (member.x >= -30 && member.z > 10 && member.z < 15) {
-            member.tx = 200;
-        }
-
-        if (member.x >= 25) {
-            member.tx = 200;
-        }
+        member.agent.material = member.isWatching ? onlookerMat : pedestrianMat;
 
         PHYSICS.update(member, agents);
     });

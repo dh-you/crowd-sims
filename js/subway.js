@@ -15,11 +15,14 @@ let world = {
 let agents = [];
 let group1 = [];
 let group2 = [];
-const COUNT = 35;
+const COUNT = 20;
 const RADIUS = 1;
-const MAXSPEED = 10;
-const agentMat = new THREE.MeshLambertMaterial({
+const MAXSPEED = 5;
+const group1Mat = new THREE.MeshLambertMaterial({
     color: 0x00ff00
+});
+const group2Mat = new THREE.MeshLambertMaterial({
+    color: 0xff0000
 });
 
 init();
@@ -104,7 +107,7 @@ function init() {
     scene.add(grid);
 
     // walls 
-    const wallMaterial = new THREE.MeshBasicMaterial({color: 0x36454F, side: THREE.DoubleSide});
+    const wallMaterial = new THREE.MeshBasicMaterial({color: 0x222222, side: THREE.DoubleSide});
 
     const geometry1 = new THREE.PlaneGeometry(100, 4);
     const plane1 = new THREE.Mesh(geometry1, wallMaterial);
@@ -196,24 +199,18 @@ function init() {
         agents.push(group1[i], group2[i]);
     }
 
-    let agentGeometry, agentMaterial, agent;
+    let agentGeometry, agent;
 
     for (let i = 0; i < COUNT; i++) {
         agentGeometry = new THREE.CylinderGeometry(group1[i].radius, 1, 4, 16);
-        agentMaterial = new THREE.MeshLambertMaterial({
-            color: 0x00ff00
-        });
-        agent = new THREE.Mesh(agentGeometry, agentMaterial);
+        agent = new THREE.Mesh(agentGeometry, group1Mat);
         agent.castShadow = true;
         agent.receiveShadow = true;
         scene.add(agent);
         group1[i].agent = agent;
 
         agentGeometry = new THREE.CylinderGeometry(group2[i].radius, 1, 4, 16);
-        agentMaterial = new THREE.MeshLambertMaterial({
-            color: 0x00ff00
-        });
-        agent = new THREE.Mesh(agentGeometry, agentMaterial);
+        agent = new THREE.Mesh(agentGeometry, group2Mat);
         agent.castShadow = true;
         agent.receiveShadow = true;
         scene.add(agent);
@@ -232,7 +229,7 @@ function animate() {
         member.agent.position.x = member.x;
         member.agent.position.y = member.y;
         member.agent.position.z = member.z;
-        member.agent.material = agentMat;
+        member.agent.material = group1Mat;
 
         if (member.z > -50 && member.z < - 17) {
             member.tz = -28;
@@ -244,14 +241,14 @@ function animate() {
 
         if (member.x > 25) {
             if ((member.z > -50 && member.z < -34) || (member.z > -22 && member.z < -6) || (member.z > 6 && member.z < 22) || (member.z > 34 && member.z < 50)) {
-                if (member.x < 25 + RADIUS) {
-                    member.x = 25 + RADIUS;
+                if (member.x < 25 + RADIUS + 0.1) {
+                    member.x = 25 + RADIUS + 0.1;
                 }
             }
         } else if (member.x < 25) {
             if ((member.z > -50 && member.z < -34) || (member.z > -22 && member.z < -6) || (member.z > 6 && member.z < 22) || (member.z > 34 && member.z < 50)) {
-                if (member.x > 25 - RADIUS) {
-                    member.x = 25 - RADIUS;
+                if (member.x > 25 - RADIUS - 0.1) {
+                    member.x = 25 - RADIUS - 0.1;
                 }
             }
         }
@@ -272,7 +269,7 @@ function animate() {
         member.agent.position.x = member.x;
         member.agent.position.y = member.y;
         member.agent.position.z = member.z;
-        member.agent.material = agentMat;
+        member.agent.material = group2Mat;
 
         if (member.z > -50 && member.z < - 17) {
             member.tz = -28;
@@ -284,14 +281,14 @@ function animate() {
 
         if (member.x < 25) {
             if ((member.z > -50 && member.z < -34) || (member.z > -22 && member.z < -6) || (member.z > 6 && member.z < 22) || (member.z > 34 && member.z < 50)) {
-                if (member.x > 25 - RADIUS) {
-                    member.x = 25 - RADIUS;
+                if (member.x > 25 - RADIUS - 0.1) {
+                    member.x = 25 - RADIUS - 0.1;
                 }
             }
         } else if (member.x > 25) {
             if ((member.z > -50 && member.z < -34) || (member.z > -22 && member.z < -6) || (member.z > 6 && member.z < 22) || (member.z > 34 && member.z < 50)) {
-                if (member.x < 25 + RADIUS) {
-                    member.x = 25 + RADIUS;
+                if (member.x < 25 + RADIUS + 0.1) {
+                    member.x = 25 + RADIUS + 0.1;
                 }
             }
         }
