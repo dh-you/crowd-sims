@@ -17,10 +17,13 @@ let selected = null;
 let mouse = new THREE.Vector2();
 const raycaster = new THREE.Raycaster();
 
-const COUNT = 100;
+const COUNT = 75;
 const RADIUS = 1;
 const MAXSPEED = 7.5;
-const COMFORT = 15;
+const MINCOMFORT = 10;
+const MAXCOMFORT = 25;
+const wAgent = 20;
+const wPerformer = 80;
 
 let performer = {
     id : -1,
@@ -38,9 +41,12 @@ let performer = {
     tz: 45,
     radius: RADIUS,
     maxSpeed: MAXSPEED,
+    goalStrength: 10,
+    horizon: 25,
     isWatching: false,
 };
 let agents = [performer];
+let points;
 
 const pedestrianMat = new THREE.MeshLambertMaterial({
     color: 0x00ff00
@@ -55,6 +61,20 @@ const performerMat = new THREE.MeshLambertMaterial({
 init();
 render();
 
+function distance(a, b) {
+    return Math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2);
+}
+
+function weightedScore(point, agent, performer) {
+    return wAgent * distance(point, [agent.x, agent.z]) + wPerformer * distance(point, [performer.x, performer.z]);
+}
+
+function generateViewingPosition(agent) {
+    return points
+        .sort((p1, p2) => weightedScore(p2, agent, performer) - weightedScore(p1, agent, performer))
+        .pop();
+}
+
 function getPostition() {
     return [Math.random() * 90 - 45, Math.random() * 30 - 15];
 }
@@ -63,10 +83,10 @@ function getVelocity() {
     return Math.random() - 0.5;
 }
 
-function generateViewingPosition() {
-    let theta = Math.random() * Math.PI + Math.PI;
-    return [performer.x + COMFORT * Math.cos(theta), performer.z + COMFORT * Math.sin(theta)];
-}
+// function generateViewingPosition() {
+//     let theta = Math.random() * Math.PI + Math.PI;
+//     return [performer.x + COMFORT * Math.cos(theta), performer.z + COMFORT * Math.sin(theta)];
+// }
 
 function init() {
     // renderer
@@ -181,6 +201,8 @@ function init() {
             tz: pos[1],
             radius: RADIUS,
             maxSpeed: MAXSPEED,
+            goalStrength: 10,
+            horizon: 100,
             isWatching: false,
         })
 
@@ -205,6 +227,25 @@ function init() {
     };
     scene.add(agent);
     agents[0].agent = agent;
+
+    // poisson disc points
+    var p = new FastPoissonDiskSampling({
+        shape: [100, 100],
+        radius: 2 * RADIUS,
+        tries: 20
+    }); 
+
+    points = p.fill();
+    points = points.map(([x, z]) => [x - 50, z - 50]);
+    points = points.filter(([x, z]) => distance([x, z], [performer.x, performer.z]) > MINCOMFORT && distance([x, z], [performer.x, performer.z]) < MAXCOMFORT);
+    
+    // let markerGeometry = new THREE.SphereGeometry(0.2, 12, 12);
+    // let markerMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    // points.forEach(([x, z]) => {
+    //     const marker = new THREE.Mesh(markerGeometry, markerMaterial);
+    //     marker.position.set(x, 0, z);
+    //     scene.add(marker);
+    // });
 
     window.addEventListener("mousedown", mouseDown, false);
 }
@@ -243,9 +284,12 @@ function animate() {
         }
 
         // pick onlookers
-        if (selected != null && member.id == selected) {
+        if (selected != null && member.id == selected && !member.isWatching) {
             member.isWatching = true;
-            [member.tx, member.tz] = generateViewingPosition();
+            member.horizon = 10;
+            member.goalStrength = 2;
+            [member.tx, member.tz] = generateViewingPosition(member);
+            console.log(points.length);
         }
 
         member.agent.position.x = member.x;

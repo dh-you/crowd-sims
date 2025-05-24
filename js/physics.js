@@ -1,6 +1,4 @@
-const K = 2;
 const MAXFORCE = 75;
-const HORIZON = 50;
 const TIMESTEP = 0.005;
 const EPSILON = 0.001;
 
@@ -57,8 +55,8 @@ export function update(agent, agents) {
     agent.gx = agent.tx - agent.x;
     agent.gz = agent.tz - agent.z;
 
-    let fxGoal = K * (agent.gx - agent.vx);
-    let fzGoal = K * (agent.gz - agent.vz);
+    let fxGoal = agent.goalStrength * (agent.gx - agent.vx);
+    let fzGoal = agent.goalStrength * (agent.gz - agent.vz);
 
     let fxAvoid = 0;
     let fzAvoid = 0;
@@ -74,9 +72,10 @@ export function update(agent, agents) {
                 dir[1] /= Math.sqrt(dot2(dir, dir));
             }
         
-            if (t >= 0 && t <= HORIZON) {
-                fxAvoid += dir[0] * (HORIZON - t) / (t + EPSILON);
-                fzAvoid += dir[1] * (HORIZON - t) / (t + EPSILON);
+            let horizon = Math.max(agent.horizon, neighbor.horizon);
+            if (t >= 0 && t <= horizon) {
+                fxAvoid += dir[0] * (horizon - t) / (t + EPSILON);
+                fzAvoid += dir[1] * (horizon - t) / (t + EPSILON);
             }
         }
     });

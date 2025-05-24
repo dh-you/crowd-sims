@@ -166,6 +166,8 @@ function init() {
             ty: 2,
             tz: 0,
             radius: RADIUS,
+            horizon: 50,
+            goalStrength: 2,
             maxSpeed: MAXSPEED,
         })
     }

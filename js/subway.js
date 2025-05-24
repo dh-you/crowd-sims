@@ -172,6 +172,8 @@ function init() {
             tz: 0,
             radius: RADIUS,
             maxSpeed: MAXSPEED,
+            horizon: 50,
+            goalStrength: 2,
             fx: 0,
             fz: 0,
         })
@@ -192,6 +194,8 @@ function init() {
             tz: 0,
             radius: RADIUS,
             maxSpeed: MAXSPEED,
+            horizon: 50,
+            goalStrength: 2,
             fx: 0,
             fz: 0,
         })
