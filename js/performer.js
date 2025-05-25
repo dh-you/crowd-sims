@@ -20,32 +20,21 @@ const raycaster = new THREE.Raycaster();
 const COUNT = 75;
 const RADIUS = 1;
 const MAXSPEED = 7.5;
+const MAXFORCE = 100;
+const HORIZON = 100;
+const K = 2;
+
 const MINCOMFORT = 10;
 const MAXCOMFORT = 25;
-const wAgent = 20;
+const wAgent = 30;
 const wPerformer = 80;
 
 let performer = {
-    id : -1,
     x: 0,
     y: 2,
     z: 45,
-    vx: 0,
-    vy: 0,
-    vz: 0,
-    gx: 0,
-    gy: 0,
-    gz: 0,
-    tx: 0,
-    ty: 2,
-    tz: 45,
-    radius: RADIUS,
-    maxSpeed: MAXSPEED,
-    goalStrength: 10,
-    horizon: 25,
-    isWatching: false,
 };
-let agents = [performer];
+let agents = [];
 let points;
 
 const pedestrianMat = new THREE.MeshLambertMaterial({
@@ -80,13 +69,11 @@ function getPostition() {
 }
 
 function getVelocity() {
-    return Math.random() - 0.5;
-}
+    let theta = Math.random() * Math.PI * 2;
+    let speed = Math.random() * MAXSPEED;
 
-// function generateViewingPosition() {
-//     let theta = Math.random() * Math.PI + Math.PI;
-//     return [performer.x + COMFORT * Math.cos(theta), performer.z + COMFORT * Math.sin(theta)];
-// }
+    return [speed * Math.cos(theta), speed * Math.sin(theta)];
+}
 
 function init() {
     // renderer
@@ -178,11 +165,8 @@ function init() {
     scene.add(wallPlane);
 
     let agentGeometry, agent;
-    for (let i = 1; i < COUNT; i++) {
-        let vx = getVelocity();
-        let vy = getVelocity();
-        let vz = getVelocity();
-
+    for (let i = 0; i < COUNT; i++) {
+        let v = getVelocity();
         let pos = getPostition();
 
         agents.push({
@@ -190,20 +174,21 @@ function init() {
             x: pos[0],
             y: 2,
             z: pos[1],
-            vx: vx,
-            vy: vy,
-            vz: vz,
-            gx: vx,
-            gy: vy,
-            gz: vz,
+            vx: v[0],
+            vy: 0,
+            vz: v[1],
+            gx: 0,
+            gy: 0,
+            gz: 0,
             tx: 50 * (Math.random() < 0.5 ? -1 : 1),
             ty: 2,
             tz: pos[1],
             radius: RADIUS,
             maxSpeed: MAXSPEED,
-            goalStrength: 10,
-            horizon: 100,
+            maxForce: MAXFORCE,
+            horizon: HORIZON,
             isWatching: false,
+            k: K,
         })
 
         agentGeometry = new THREE.CylinderGeometry(RADIUS, 1, 4, 16);
@@ -219,14 +204,11 @@ function init() {
     }
 
     // performer
-    agent = new THREE.Mesh(agentGeometry, pedestrianMat);
+    agent = new THREE.Mesh(agentGeometry, performerMat);
     agent.castShadow = true;
     agent.receiveShadow = true;
-    agent.userData = {
-        "id": agents[0].id
-    };
+    agent.position.set(performer.x, performer.y, performer.z);
     scene.add(agent);
-    agents[0].agent = agent;
 
     // poisson disc points
     var p = new FastPoissonDiskSampling({
@@ -286,8 +268,6 @@ function animate() {
         // pick onlookers
         if (selected != null && member.id == selected && !member.isWatching) {
             member.isWatching = true;
-            member.horizon = 10;
-            member.goalStrength = 2;
             [member.tx, member.tz] = generateViewingPosition(member);
             console.log(points.length);
         }

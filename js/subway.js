@@ -18,6 +18,10 @@ let group2 = [];
 const COUNT = 20;
 const RADIUS = 1;
 const MAXSPEED = 5;
+const MAXFORCE = 75;
+const HORIZON = 50;
+const K = 2;
+
 const group1Mat = new THREE.MeshLambertMaterial({
     color: 0x00ff00
 });
@@ -33,7 +37,10 @@ function getPostition(min, max) {
 }
 
 function getVelocity() {
-    return Math.random() - 0.5;
+    let theta = Math.random() * Math.PI * 2;
+    let speed = Math.random() * MAXSPEED;
+
+    return [speed * Math.cos(theta), speed * Math.sin(theta)];
 }
 
 function init() {
@@ -152,50 +159,50 @@ function init() {
     scene.add(plane7);
 
     for (let i = 0; i < COUNT; i++) {
-        let vx = getVelocity();
-        let vy = getVelocity();
-        let vz = getVelocity();
-
+        let v = getVelocity();
         group1.push({
             id : i,
             x: getPostition(27, 48),
             y: 2,
             z: getPostition(-39, 39),
-            vx: vx,
-            vy: vy,
-            vz: vz,
-            gx: vx,
-            gy: vy,
-            gz: vz,
+            vx: v[0],
+            vy: 0,
+            vz: v[1],
+            gx: 0,
+            gy: 0,
+            gz: 0,
             tx: 0,
             ty: 2,
             tz: 0,
             radius: RADIUS,
             maxSpeed: MAXSPEED,
-            horizon: 50,
-            goalStrength: 2,
+            maxForce: MAXFORCE,
+            horizon: HORIZON,
+            k: K,
             fx: 0,
             fz: 0,
         })
 
+        v = getVelocity();
         group2.push({
             id : i,
             x: getPostition(0, 23),
             y: 2,
             z: getPostition(-39, 39),
-            vx: vx,
-            vy: vy,
-            vz: vz,
-            gx: vx,
-            gy: vy,
-            gz: vz,
+            vx: v[0],
+            vy: 0,
+            vz: v[1],
+            gx: 0,
+            gy: 0,
+            gz: 0,
             tx: 0,
             ty: 2,
             tz: 0,
             radius: RADIUS,
             maxSpeed: MAXSPEED,
-            horizon: 50,
-            goalStrength: 2,
+            maxForce: MAXFORCE,
+            horizon: HORIZON,
+            k: K,
             fx: 0,
             fz: 0,
         })

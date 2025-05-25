@@ -16,6 +16,8 @@ let agents = [];
 const COUNT = 200;
 const RADIUS = 1;
 const MAXSPEED = 10;
+const MAXFORCE = 75;
+
 const agentMat = new THREE.MeshLambertMaterial({
     color: 0x00ff00
 });
@@ -28,7 +30,10 @@ function getPostition() {
 }
 
 function getVelocity() {
-    return Math.random() - 0.5;
+    let theta = Math.random() * Math.PI * 2;
+    let speed = Math.random() * MAXSPEED;
+
+    return [speed * Math.cos(theta), speed * Math.sin(theta)];
 }
 
 function init() {
@@ -102,7 +107,7 @@ function init() {
     scene.add(grid);
 
     // walls 
-    const wallMaterial = new THREE.MeshBasicMaterial({color: 0x36454F, side: THREE.DoubleSide});
+    const wallMaterial = new THREE.MeshBasicMaterial({color: 0x222222, side: THREE.DoubleSide});
 
     const geometry1 = new THREE.PlaneGeometry(100, 4);
     const plane1 = new THREE.Mesh(geometry1, wallMaterial);
@@ -147,28 +152,28 @@ function init() {
     scene.add(plane7);
 
     for (let i = 0; i < COUNT; i++) {
-        let vx = getVelocity();
-        let vy = getVelocity();
-        let vz = getVelocity();
+        let v = getVelocity();
+        let pos = getPostition();   
 
         agents.push({
             id : i,
-            x: getPostition()[1],
+            x: pos[1],
             y: 2,
-            z: getPostition()[0],
-            vx: vx,
-            vy: vy,
-            vz: vz,
-            gx: vx,
-            gy: vy,
-            gz: vz,
+            z: pos[0],
+            vx: v[0],
+            vy: 0,
+            vz: v[1],
+            gx: 0,
+            gy: 0,
+            gz: 0,
             tx: 0,
             ty: 2,
             tz: 0,
             radius: RADIUS,
             horizon: 50,
-            goalStrength: 2,
+            k: 2,
             maxSpeed: MAXSPEED,
+            maxForce: MAXFORCE,
         })
     }
 

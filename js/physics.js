@@ -1,6 +1,6 @@
-const MAXFORCE = 75;
 const TIMESTEP = 0.005;
 const EPSILON = 0.001;
+const YIELD = 2.0;
 
 function dot2(a, b) {
     return a[0] * b[0] + a[1] * b[1];
@@ -33,9 +33,9 @@ function timeToCollision(agent, neighbor) {
 
 export function applyForce(agent, f) {
     let force = magnitude(f);
-    if (force > MAXFORCE) {
-        f[0] = MAXFORCE * f[0] / force;
-        f[1] = MAXFORCE * f[1] / force;
+    if (force > agent.maxForce) {
+        f[0] = agent.maxForce * f[0] / force;
+        f[1] = agent.maxForce * f[1] / force;
     }
 
     agent.vx += f[0] * TIMESTEP;
@@ -55,8 +55,8 @@ export function update(agent, agents) {
     agent.gx = agent.tx - agent.x;
     agent.gz = agent.tz - agent.z;
 
-    let fxGoal = agent.goalStrength * (agent.gx - agent.vx);
-    let fzGoal = agent.goalStrength * (agent.gz - agent.vz);
+    let fxGoal = agent.k * (agent.gx - agent.vx);
+    let fzGoal = agent.k * (agent.gz - agent.vz);
 
     let fxAvoid = 0;
     let fzAvoid = 0;
@@ -73,9 +73,10 @@ export function update(agent, agents) {
             }
         
             let horizon = Math.max(agent.horizon, neighbor.horizon);
+            horizon = agent.isWatching && neighbor.isWatching ? 1 : horizon;
             if (t >= 0 && t <= horizon) {
-                fxAvoid += dir[0] * (horizon - t) / (t + EPSILON);
-                fzAvoid += dir[1] * (horizon - t) / (t + EPSILON);
+                fxAvoid +=  dir[0] * (horizon - t) / (t + EPSILON);
+                fzAvoid +=  dir[1] * (horizon - t) / (t + EPSILON);
             }
         }
     });
