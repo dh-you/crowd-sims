@@ -16,9 +16,7 @@ let agents = [];
 const COUNT = 20;
 const RADIUS = 1;
 const MAXSPEED = 5;
-const MAXFORCE = 100;
 const HORIZON = 100;
-const K = 2;
 
 const group1Mat = new THREE.MeshLambertMaterial({
     color: 0x00ff00
@@ -160,7 +158,7 @@ function init() {
         let v = getVelocity();
 
         let k = 1.5 + Math.random() * 1.5;
-        let maxSpeed = 8 + Math.random() * 6;
+        let maxSpeed = Math.random() * (MAXSPEED - 5) + 5;
         let maxForce = 30 + Math.random() * 40;  
 
         agents.push({
@@ -217,7 +215,7 @@ function init() {
             k: k,
             fx: 0,
             fz: 0,
-            yield: false,
+            yield: true,
             group: 2,
         });
     }
@@ -276,6 +274,10 @@ function animate() {
                     member.x = 25 - RADIUS - 0.1;
                 }
             }
+        }
+
+        if (member.z > 50 - RADIUS) {
+            member.z = 50 - RADIUS;
         }
 
         if (member.group == 1) {

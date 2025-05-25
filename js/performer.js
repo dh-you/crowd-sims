@@ -17,12 +17,10 @@ let selected = null;
 let mouse = new THREE.Vector2();
 const raycaster = new THREE.Raycaster();
 
-const COUNT = 75;
+const COUNT = 50;
 const RADIUS = 1;
 const MAXSPEED = 7.5;
-const MAXFORCE = 100;
 const HORIZON = 100;
-const K = 2;
 
 const MINCOMFORT = 10;
 const MAXCOMFORT = 25;
@@ -192,6 +190,7 @@ function init() {
             maxForce: maxForce,
             horizon: HORIZON,
             yield: false,
+            isWatching: false,
             k: k,
         })
 
@@ -270,16 +269,22 @@ function animate() {
         }
 
         // pick onlookers
-        if (selected != null && member.id == selected && !member.yield) {
+        if (selected != null && member.id == selected && !member.isWatching) {
+            member.isWatching = true;
             member.yield = true;
             [member.tx, member.tz] = generateViewingPosition(member);
             console.log(points.length);
         }
 
+        if (member.isWatching && member.z > 20) {
+            member.yield = false;
+            member.horizon = 1;
+        }
+
         member.agent.position.x = member.x;
         member.agent.position.y = member.y;
         member.agent.position.z = member.z;
-        member.agent.material = member.yield ? onlookerMat : pedestrianMat;
+        member.agent.material = member.isWatching ? onlookerMat : pedestrianMat;
 
         PHYSICS.update(member, agents);
     });

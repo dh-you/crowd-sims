@@ -72,11 +72,9 @@ export function update(agent, agents) {
                 dir[1] /= Math.sqrt(dot2(dir, dir));
             }
         
-            let horizon = Math.max(agent.horizon, neighbor.horizon);
-            horizon = agent.yield && neighbor.yield ? 1 : horizon;
-            if (t >= 0 && t <= horizon) {
-                fxAvoid += (agent.yield ^ neighbor.yield ? YIELD : 1) * dir[0] * (horizon - t) / (t + EPSILON);
-                fzAvoid += (agent.yield ^ neighbor.yield ? YIELD : 1) * dir[1] * (horizon - t) / (t + EPSILON);
+            if (t >= 0 && t <= agent.horizon) {
+                fxAvoid += (agent.yield ? YIELD : 1) * dir[0] * (agent.horizon - t) / (t + EPSILON);
+                fzAvoid += (agent.yield ? YIELD : 1) * dir[1] * (agent.horizon - t) / (t + EPSILON);
             }
         }
     });
