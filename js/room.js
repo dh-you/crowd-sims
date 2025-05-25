@@ -13,10 +13,10 @@ let world = {
 };
 
 let agents = [];
-const COUNT = 200;
+const COUNT = 150;
 const RADIUS = 1;
 const MAXSPEED = 10;
-const MAXFORCE = 75;
+const HORIZON = 50;
 
 const agentMat = new THREE.MeshLambertMaterial({
     color: 0x00ff00
@@ -153,7 +153,11 @@ function init() {
 
     for (let i = 0; i < COUNT; i++) {
         let v = getVelocity();
-        let pos = getPostition();   
+        let pos = getPostition();  
+
+        let k = 1.5 + Math.random() * 1.5;
+        let maxSpeed = Math.random() * (MAXSPEED - 5) + 5;
+        let maxForce = 30 + Math.random() * 40;  
 
         agents.push({
             id : i,
@@ -170,10 +174,11 @@ function init() {
             ty: 2,
             tz: 0,
             radius: RADIUS,
-            horizon: 50,
-            k: 2,
-            maxSpeed: MAXSPEED,
-            maxForce: MAXFORCE,
+            horizon: HORIZON,
+            k: k,
+            maxSpeed: maxSpeed,
+            maxForce: maxForce,
+            yield: false,
         })
     }
 

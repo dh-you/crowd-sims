@@ -169,6 +169,10 @@ function init() {
         let v = getVelocity();
         let pos = getPostition();
 
+        let k = 1.5 + Math.random() * 1.5;
+        let maxSpeed = Math.random() * (MAXSPEED - 5) + 5;
+        let maxForce = 30 + Math.random() * 40;  
+
         agents.push({
             id : i,
             x: pos[0],
@@ -184,11 +188,11 @@ function init() {
             ty: 2,
             tz: pos[1],
             radius: RADIUS,
-            maxSpeed: MAXSPEED,
-            maxForce: MAXFORCE,
+            maxSpeed: maxSpeed,
+            maxForce: maxForce,
             horizon: HORIZON,
-            isWatching: false,
-            k: K,
+            yield: false,
+            k: k,
         })
 
         agentGeometry = new THREE.CylinderGeometry(RADIUS, 1, 4, 16);
@@ -266,8 +270,8 @@ function animate() {
         }
 
         // pick onlookers
-        if (selected != null && member.id == selected && !member.isWatching) {
-            member.isWatching = true;
+        if (selected != null && member.id == selected && !member.yield) {
+            member.yield = true;
             [member.tx, member.tz] = generateViewingPosition(member);
             console.log(points.length);
         }
@@ -275,7 +279,7 @@ function animate() {
         member.agent.position.x = member.x;
         member.agent.position.y = member.y;
         member.agent.position.z = member.z;
-        member.agent.material = member.isWatching ? onlookerMat : pedestrianMat;
+        member.agent.material = member.yield ? onlookerMat : pedestrianMat;
 
         PHYSICS.update(member, agents);
     });

@@ -1,6 +1,6 @@
 const TIMESTEP = 0.005;
 const EPSILON = 0.001;
-const YIELD = 2.0;
+const YIELD = 3.0;
 
 function dot2(a, b) {
     return a[0] * b[0] + a[1] * b[1];
@@ -73,10 +73,10 @@ export function update(agent, agents) {
             }
         
             let horizon = Math.max(agent.horizon, neighbor.horizon);
-            horizon = agent.isWatching && neighbor.isWatching ? 1 : horizon;
+            horizon = agent.yield && neighbor.yield ? 1 : horizon;
             if (t >= 0 && t <= horizon) {
-                fxAvoid +=  dir[0] * (horizon - t) / (t + EPSILON);
-                fzAvoid +=  dir[1] * (horizon - t) / (t + EPSILON);
+                fxAvoid += (agent.yield ^ neighbor.yield ? YIELD : 1) * dir[0] * (horizon - t) / (t + EPSILON);
+                fzAvoid += (agent.yield ^ neighbor.yield ? YIELD : 1) * dir[1] * (horizon - t) / (t + EPSILON);
             }
         }
     });
