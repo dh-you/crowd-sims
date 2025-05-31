@@ -1,16 +1,8 @@
+import { createScene } from './environment.js';
 import * as THREE from 'three';
 import * as PHYSICS from 'physics';
-import {
-    OrbitControls
-} from "three/addons/controls/OrbitControls.js";
 
 const LENGTH = 100;
-
-let renderer, scene, camera;
-let world = {
-    x: LENGTH,
-    z: LENGTH
-};
 
 let agents = [];
 const COUNT = 125;
@@ -22,6 +14,7 @@ const agentMat = new THREE.MeshLambertMaterial({
     color: 0x00ff00
 });
 
+const { renderer, scene, camera } = createScene();
 init();
 render();
 
@@ -37,78 +30,9 @@ function getVelocity() {
 }
 
 function init() {
-    // renderer
-    renderer = new THREE.WebGLRenderer();
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap; //
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
-    // scene
-    scene = new THREE.Scene();
-    // camera
-    camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
-
-    camera.position.set(-67.26, 54.07, -3.77);
-    camera.rotation.order = 'YXZ';
-    camera.rotation.y = -1.6267;
-    camera.rotation.x = -0.46;
-
-    // controls
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.addEventListener('change', render);
-    controls.enableZoom = false;
-    controls.enablePan = false;
-    controls.maxPolarAngle = Math.PI / 2;
-
-    // light
-    const light = new THREE.PointLight(0xffffff, 0.9, 0, 100000);
-    light.position.set(0, 50, 120);
-    light.castShadow = true;
-    light.shadow.mapSize.width = 512; // default
-    light.shadow.mapSize.height = 512; // default
-    light.shadow.camera.near = 0.5; // default
-    light.shadow.camera.far = 5000; // default
-
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-    directionalLight.castShadow = true;
-    directionalLight.position.set(-5, 20, 4);
-    directionalLight.target.position.set(9, 0, -9);
-    directionalLight.shadow.camera.left *= 9;
-    directionalLight.shadow.camera.right *= 9;
-    directionalLight.shadow.camera.top *= 9;
-    directionalLight.shadow.camera.bottom *= 9;
-
-    scene.add(directionalLight);
-    const cameraHelper = new THREE.CameraHelper(directionalLight.shadow.camera);
-
-    // axes
-    // scene.add(new THREE.AxesHelper(40));
-    const loader = new THREE.TextureLoader();
-    const texture = loader.load('../resources/OIP.jpg');
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.magFilter = THREE.NearestFilter;
-    const repeats = 40 / 32;
-    texture.repeat.set(repeats, repeats);
-
-    // grid
-    const geometry = new THREE.PlaneGeometry(world.x, world.z, 10, 10);
-    //const material = new THREE.MeshBasicMaterial( {  opacity: 0.5, transparent: true } );
-    const material = new THREE.MeshPhongMaterial({
-        map: texture,
-        //side: THREE.DoubleSide,
-    });
-    const grid = new THREE.Mesh(geometry, material);
-    grid.castShadow = true; //default is false
-    grid.receiveShadow = true; //default  
-    grid.rotation.order = 'YXZ';
-    grid.rotation.y = -Math.PI / 2;
-    grid.rotation.x = -Math.PI / 2;
-    scene.add(grid);
-
     // walls 
     const wallMaterial = new THREE.MeshBasicMaterial({color: 0x222222, side: THREE.DoubleSide});
-    const walkwayMaterial = new THREE.MeshBasicMaterial({color: 0x000000, side: THREE.DoubleSide});
+    const streetMaterial = new THREE.MeshPhongMaterial({ color: 0x222222, side: THREE.DoubleSide });
 
     const geometry10 = new THREE.PlaneGeometry(60, 2);
     const plane10 = new THREE.Mesh(geometry10, wallMaterial);
@@ -123,7 +47,7 @@ function init() {
     scene.add(plane11);
 
     const geometry12 = new THREE.PlaneGeometry(60, 5);
-    const plane12 = new THREE.Mesh(geometry12, walkwayMaterial);
+    const plane12 = new THREE.Mesh(geometry12, streetMaterial);
     plane12.castShadow = true;
     plane12.receiveShadow = true;
     plane12.rotation.set(Math.PI / 2, 0, 0);
@@ -143,7 +67,7 @@ function init() {
     scene.add(plane14);
 
     const geometry15 = new THREE.PlaneGeometry(60, 5);
-    const plane15 = new THREE.Mesh(geometry15, walkwayMaterial);
+    const plane15 = new THREE.Mesh(geometry15, streetMaterial);
     plane15.castShadow = true;
     plane15.receiveShadow = true;
     plane15.rotation.set(Math.PI / 2, 0, 0);

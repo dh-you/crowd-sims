@@ -1,16 +1,6 @@
+import { createScene } from './environment.js';
 import * as THREE from 'three';
 import * as PHYSICS from 'physics';
-import {
-    OrbitControls
-} from "three/addons/controls/OrbitControls.js";
-
-const LENGTH = 100;
-
-let renderer, scene, camera;
-let world = {
-    x: LENGTH,
-    z: LENGTH
-};
 
 let pickableObjects = [];
 let selected = null;
@@ -45,6 +35,7 @@ const performerMat = new THREE.MeshLambertMaterial({
     color: 0xff0000
 });
 
+const { renderer, scene, camera } = createScene();
 init();
 render();
 
@@ -74,77 +65,8 @@ function getVelocity() {
 }
 
 function init() {
-    // renderer
-    renderer = new THREE.WebGLRenderer();
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap; //
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
-    // scene
-    scene = new THREE.Scene();
-    // camera
-    camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
-
-    camera.position.set(-67.26, 54.07, -3.77);
-    camera.rotation.order = 'YXZ';
-    camera.rotation.y = -1.6267;
-    camera.rotation.x = -0.46;
-
-    // controls
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.addEventListener('change', render);
-    controls.enableZoom = false;
-    controls.enablePan = false;
-    controls.maxPolarAngle = Math.PI / 2;
-
-    // light
-    const light = new THREE.PointLight(0xffffff, 0.9, 0, 100000);
-    light.position.set(0, 50, 120);
-    light.castShadow = true;
-    light.shadow.mapSize.width = 512; // default
-    light.shadow.mapSize.height = 512; // default
-    light.shadow.camera.near = 0.5; // default
-    light.shadow.camera.far = 5000; // default
-
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-    directionalLight.castShadow = true;
-    directionalLight.position.set(-5, 20, 4);
-    directionalLight.target.position.set(9, 0, -9);
-    directionalLight.shadow.camera.left *= 9;
-    directionalLight.shadow.camera.right *= 9;
-    directionalLight.shadow.camera.top *= 9;
-    directionalLight.shadow.camera.bottom *= 9;
-
-    scene.add(directionalLight);
-    const cameraHelper = new THREE.CameraHelper(directionalLight.shadow.camera);
-
-    // axes
-    // scene.add(new THREE.AxesHelper(40));
-    const loader = new THREE.TextureLoader();
-    const texture = loader.load('../resources/OIP.jpg');
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.magFilter = THREE.NearestFilter;
-    const repeats = 40 / 32;
-    texture.repeat.set(repeats, repeats);
-
-    // grid
-    const geometry = new THREE.PlaneGeometry(world.x, world.z, 10, 10);
-    //const material = new THREE.MeshBasicMaterial( {  opacity: 0.5, transparent: true } );
-    const material = new THREE.MeshPhongMaterial({
-        map: texture,
-        //side: THREE.DoubleSide,
-    });
-    const grid = new THREE.Mesh(geometry, material);
-    grid.castShadow = true; //default is false
-    grid.receiveShadow = true; //default  
-    grid.rotation.order = 'YXZ';
-    grid.rotation.y = -Math.PI / 2;
-    grid.rotation.x = -Math.PI / 2;
-    scene.add(grid);
-
     // street 
-    const streetMaterial = new THREE.MeshBasicMaterial({color: 0x222222, side: THREE.DoubleSide});
+    const streetMaterial = new THREE.MeshPhongMaterial({ color: 0x222222, side: THREE.DoubleSide });
     const streetGeometry = new THREE.PlaneGeometry(100, 30);
     const streetPlane = new THREE.Mesh(streetGeometry, streetMaterial);
     streetPlane.castShadow = true;
@@ -152,15 +74,6 @@ function init() {
     streetPlane.rotation.set(Math.PI / 2, 0, 0);
     streetPlane.position.set(0, 0.05, 0);
     scene.add(streetPlane);
-
-    // wall
-    const wallMaterial = new THREE.MeshBasicMaterial({color: 0x231709, side: THREE.DoubleSide});
-    const wallGeometry = new THREE.PlaneGeometry(100, 10);
-    const wallPlane = new THREE.Mesh(wallGeometry, wallMaterial);
-    wallPlane.receiveShadow = true;
-    wallPlane.rotation.set(Math.PI, 0, 0);
-    wallPlane.position.set(0, 5, 50);
-    scene.add(wallPlane);
 
     let agentGeometry, agent;
     for (let i = 0; i < COUNT; i++) {
@@ -223,14 +136,6 @@ function init() {
     points = p.fill();
     points = points.map(([x, z]) => [x - 50, z - 50]);
     points = points.filter(([x, z]) => distance([x, z], [performer.x, performer.z]) > MINCOMFORT && distance([x, z], [performer.x, performer.z]) < MAXCOMFORT);
-    
-    // let markerGeometry = new THREE.SphereGeometry(0.2, 12, 12);
-    // let markerMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-    // points.forEach(([x, z]) => {
-    //     const marker = new THREE.Mesh(markerGeometry, markerMaterial);
-    //     marker.position.set(x, 0, z);
-    //     scene.add(marker);
-    // });
 
     window.addEventListener("mousedown", mouseDown, false);
 }

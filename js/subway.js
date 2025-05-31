@@ -1,16 +1,6 @@
+import { createScene } from './environment.js';
 import * as THREE from 'three';
 import * as PHYSICS from 'physics';
-import {
-    OrbitControls
-} from "three/addons/controls/OrbitControls.js";
-
-const LENGTH = 100;
-
-let renderer, scene, camera;
-let world = {
-    x: LENGTH,
-    z: LENGTH
-};
 
 let agents = [];
 const COUNT = 20;
@@ -25,6 +15,7 @@ const group2Mat = new THREE.MeshLambertMaterial({
     color: 0xff0000
 });
 
+const { renderer, scene, camera } = createScene();
 init();
 render();
 
@@ -40,119 +31,85 @@ function getVelocity() {
 }
 
 function init() {
-    // renderer
-    renderer = new THREE.WebGLRenderer();
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap; //
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
-    // scene
-    scene = new THREE.Scene();
-    // camera
-    camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
-
-    camera.position.set(-67.26, 54.07, -3.77);
-    camera.rotation.order = 'YXZ';
-    camera.rotation.y = -1.6267;
-    camera.rotation.x = -0.46;
-
-    // controls
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.addEventListener('change', render);
-    controls.enableZoom = false;
-    controls.enablePan = false;
-    controls.maxPolarAngle = Math.PI / 2;
-
-    // light
-    const light = new THREE.PointLight(0xffffff, 0.9, 0, 100000);
-    light.position.set(0, 50, 120);
-    light.castShadow = true;
-    light.shadow.mapSize.width = 512; // default
-    light.shadow.mapSize.height = 512; // default
-    light.shadow.camera.near = 0.5; // default
-    light.shadow.camera.far = 5000; // default
-
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-    directionalLight.castShadow = true;
-    directionalLight.position.set(-5, 20, 4);
-    directionalLight.target.position.set(9, 0, -9);
-    directionalLight.shadow.camera.left *= 9;
-    directionalLight.shadow.camera.right *= 9;
-    directionalLight.shadow.camera.top *= 9;
-    directionalLight.shadow.camera.bottom *= 9;
-
-    scene.add(directionalLight);
-    const cameraHelper = new THREE.CameraHelper(directionalLight.shadow.camera);
-
-    // axes
-    // scene.add(new THREE.AxesHelper(40));
-    const loader = new THREE.TextureLoader();
-    const texture = loader.load('../resources/OIP.jpg');
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.magFilter = THREE.NearestFilter;
-    const repeats = 40 / 32;
-    texture.repeat.set(repeats, repeats);
-
-    // grid
-    const geometry = new THREE.PlaneGeometry(world.x, world.z, 10, 10);
-    //const material = new THREE.MeshBasicMaterial( {  opacity: 0.5, transparent: true } );
-    const material = new THREE.MeshPhongMaterial({
-        map: texture,
-        //side: THREE.DoubleSide,
-    });
-    const grid = new THREE.Mesh(geometry, material);
-    grid.castShadow = true; //default is false
-    grid.receiveShadow = true; //default  
-    grid.rotation.order = 'YXZ';
-    grid.rotation.y = -Math.PI / 2;
-    grid.rotation.x = -Math.PI / 2;
-    scene.add(grid);
-
     // walls 
-    const wallMaterial = new THREE.MeshBasicMaterial({color: 0x222222, side: THREE.DoubleSide});
+    const wallMaterial = new THREE.MeshStandardMaterial({
+        color: 0xa2a4a8,   
+        metalness: 0.1,       
+        roughness: 0.2,       
+        side: THREE.DoubleSide
+    });
+
+    const floorMaterial = new THREE.MeshPhongMaterial({ color: 0x555555, side: THREE.DoubleSide });
 
     const geometry1 = new THREE.PlaneGeometry(100, 4);
     const plane1 = new THREE.Mesh(geometry1, wallMaterial);
+    plane1.receiveShadow = true;    
     plane1.rotation.set(0, Math.PI / 2, 0);
     plane1.position.set(50, 2, 0);
     scene.add(plane1);
 
-    const geometry2 = new THREE.PlaneGeometry(25, 4);
+    const geometry2 = new THREE.PlaneGeometry(15, 4);
     const plane2 = new THREE.Mesh(geometry2, wallMaterial);
+    plane2.receiveShadow = true;    
     plane2.rotation.set(Math.PI, 0, 0);
-    plane2.position.set(37.5, 2, -50);
+    plane2.position.set(42.5, 2, -50);
     scene.add(plane2);
 
-    const geometry3 = new THREE.PlaneGeometry(25, 4);
+    const geometry3 = new THREE.PlaneGeometry(15, 4);
     const plane3 = new THREE.Mesh(geometry3, wallMaterial);
+    plane3.castShadow = true;
+    plane3.receiveShadow = true;    
     plane3.rotation.set(Math.PI, 0, 0);
-    plane3.position.set(37.5, 2, 50);
+    plane3.position.set(42.5, 2, 50);
     scene.add(plane3);
 
-    const geometry4 = new THREE.PlaneGeometry(16, 4);
+    const geometry4 = new THREE.PlaneGeometry(12, 4);
     const plane4 = new THREE.Mesh(geometry4, wallMaterial);
+    plane4.castShadow = true;
+    plane4.receiveShadow = true;    
     plane4.rotation.set(0, Math.PI / 2, 0);
-    plane4.position.set(25, 2, -42);
+    plane4.position.set(35, 2, -44);
     scene.add(plane4);
 
-    const geometry5 = new THREE.PlaneGeometry(16, 4);
+    const geometry5 = new THREE.PlaneGeometry(12, 4);
     const plane5 = new THREE.Mesh(geometry5, wallMaterial);
+    plane5.castShadow = true;
+    plane5.receiveShadow = true;    
     plane5.rotation.set(0, Math.PI / 2, 0);
-    plane5.position.set(25, 2, -14);
+    plane5.position.set(35, 2, -22);
     scene.add(plane5);
 
-    const geometry6 = new THREE.PlaneGeometry(16, 4);
+    const geometry6 = new THREE.PlaneGeometry(12, 4);
     const plane6 = new THREE.Mesh(geometry6, wallMaterial);
+    plane6.castShadow = true;
+    plane6.receiveShadow = true;    
     plane6.rotation.set(0, Math.PI / 2, 0);
-    plane6.position.set(25, 2, 14);
+    plane6.position.set(35, 2, 0);
     scene.add(plane6);
 
-    const geometry7 = new THREE.PlaneGeometry(16, 4);
+    const geometry7 = new THREE.PlaneGeometry(12, 4);
     const plane7 = new THREE.Mesh(geometry7, wallMaterial);
+    plane7.castShadow = true;
+    plane7.receiveShadow = true;    
     plane7.rotation.set(0, Math.PI / 2, 0);
-    plane7.position.set(25, 2, 42);
+    plane7.position.set(35, 2, 22);
     scene.add(plane7);
+
+    const geometry8 = new THREE.PlaneGeometry(12, 4);
+    const plane8 = new THREE.Mesh(geometry8, wallMaterial);
+    plane8.castShadow = true;
+    plane8.receiveShadow = true;    
+    plane8.rotation.set(0, Math.PI / 2, 0);
+    plane8.position.set(35, 2, 44);
+    scene.add(plane8);
+
+    const geometry9 = new THREE.PlaneGeometry(100, 15);
+    const plane9 = new THREE.Mesh(geometry9, floorMaterial);
+    plane9.castShadow = true;
+    plane9.receiveShadow = true;    
+    plane9.rotation.set(Math.PI / 2, 0, Math.PI / 2);
+    plane9.position.set(42.5, 0.05, 0);
+    scene.add(plane9);
 
     for (let i = 0; i < COUNT; i++) {
         let v = getVelocity();
