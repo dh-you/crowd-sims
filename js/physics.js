@@ -1,26 +1,19 @@
+import * as THREE from 'three';
+
 const TIMESTEP = 0.005;
 const EPSILON = 0.001;
-const YIELD = 3.0;
-
-function dot2(a, b) {
-    return a[0] * b[0] + a[1] * b[1];
-}
-
-function magnitude(a) {
-    return Math.sqrt(a[0]**2 + a[1]**2);
-}
 
 function timeToCollision(agent, neighbor) {
     let r = agent.radius + neighbor.radius;
-    let w = [neighbor.x - agent.x, neighbor.z - agent.z];
+    let w = new THREE.Vector3(neighbor.position.x - agent.position.x, 0, neighbor.position.z - agent.position.z);
     
-    let c =  dot2(w, w) - r * r;
+    let c =  w.dot(w) - r * r;
     if (c < 0) { return 0; }
 
-    let v = [agent.vx - neighbor.vx, agent.vz - neighbor.vz];
+    let v = new THREE.Vector3(agent.velocity.x - neighbor.velocity.x, 0, agent.velocity.z - neighbor.velocity.z);
 
-    let a = dot2(v, v);
-    let b = dot2(w, v);
+    let a = v.dot(v);
+    let b = w.dot(v);
 
     let discriminant = b * b - a * c;
     if (discriminant <= 0) { return Infinity; }
@@ -32,49 +25,50 @@ function timeToCollision(agent, neighbor) {
 }
 
 export function applyForce(agent, f) {
-    let force = magnitude(f);
+    let force = f.length();
     if (force > agent.maxForce) {
-        f[0] = agent.maxForce * f[0] / force;
-        f[1] = agent.maxForce * f[1] / force;
+        f.x = agent.maxForce * f.x / force;
+        f.z = agent.maxForce * f.z / force;
     }
 
-    agent.vx += f[0] * TIMESTEP;
-    agent.vz += f[1] * TIMESTEP;
+    agent.velocity.x += f.x * TIMESTEP;
+    agent.velocity.z += f.z * TIMESTEP;
 
-    let speed = magnitude([agent.vx, agent.vz]);
+    let speed = agent.velocity.length();
     if (speed > agent.maxSpeed) {
-        agent.vx = agent.maxSpeed * agent.vx / speed;
-        agent.vz = agent.maxSpeed * agent.vz / speed;
+        agent.velocity.x = agent.maxSpeed * agent.velocity.x / speed;
+        agent.velocity.z = agent.maxSpeed * agent.velocity.z / speed;
     }
 
-    agent.x += agent.vx * TIMESTEP;
-    agent.z += agent.vz * TIMESTEP;
+    agent.position.x += agent.velocity.x * TIMESTEP;
+    agent.position.z += agent.velocity.z * TIMESTEP;
 }
 
 export function update(agent, agents) {
-    agent.gx = agent.tx - agent.x;
-    agent.gz = agent.tz - agent.z;
+    agent.goal.x = agent.target.x - agent.position.x;
+    agent.goal.z = agent.target.z - agent.position.z;
 
-    let fxGoal = agent.k * (agent.gx - agent.vx);
-    let fzGoal = agent.k * (agent.gz - agent.vz);
+    let fxGoal = agent.k * (agent.goal.x - agent.velocity.x);
+    let fzGoal = agent.k * (agent.goal.z - agent.velocity.z);
 
     let fxAvoid = 0;
     let fzAvoid = 0;
 
     agents.forEach(function(neighbor) {
-        if (neighbor.id != agent.id) {
+        if (neighbor.getData("id") != agent.getData("id")) {
             let t = timeToCollision(agent, neighbor);
 
-            let dir = [(agent.x + agent.vx * t) - (neighbor.x + neighbor.vx * t),  (agent.z + agent.vz * t) - (neighbor.z + neighbor.vz * t)];
+            let dir = new THREE.Vector3(
+                (agent.position.x + agent.velocity.x * t) - (neighbor.position.x + neighbor.velocity.x * t),
+                0,
+                (agent.position.z + agent.velocity.z * t) - (neighbor.position.z + neighbor.velocity.z * t)
+            );
 
-            if (dir[0] != 0 && dir[1] != 0) {
-                dir[0] /= Math.sqrt(dot2(dir, dir));
-                dir[1] /= Math.sqrt(dot2(dir, dir));
-            }
+            dir.normalize();
         
             if (t >= 0 && t <= agent.horizon) {
-                fxAvoid += (agent.yield ? YIELD : 1) * dir[0] * (agent.horizon - t) / (t + EPSILON);
-                fzAvoid += (agent.yield ? YIELD : 1) * dir[1] * (agent.horizon - t) / (t + EPSILON);
+                fxAvoid += (agent.yieldStatus ? agent.yieldFactor : 1) * dir.x * (agent.horizon - t) / (t + EPSILON);
+                fzAvoid += (agent.yieldStatus ? agent.yieldFactor : 1) * dir.z * (agent.horizon - t) / (t + EPSILON);
             }
         }
     });
@@ -82,5 +76,5 @@ export function update(agent, agents) {
     let fx = fxGoal + fxAvoid;
     let fz = fzGoal + fzAvoid;
 
-    applyForce(agent, [fx, fz]);
+    applyForce(agent, new THREE.Vector3(fx, 0, fz));
 }

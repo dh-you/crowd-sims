@@ -1,4 +1,5 @@
 import { createScene } from './environment.js';
+import { Agent } from './agent.js';
 import * as THREE from 'three';
 import * as PHYSICS from 'physics';
 
@@ -17,11 +18,7 @@ const MAXCOMFORT = 25;
 const wAgent = 30;
 const wPerformer = 80;
 
-let performer = {
-    x: 0,
-    y: 2,
-    z: 45,
-};
+let performer = new THREE.Vector3(0, 2, 45);
 let agents = [];
 let points;
 
@@ -39,12 +36,8 @@ const { renderer, scene, camera } = createScene();
 init();
 render();
 
-function distance(a, b) {
-    return Math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2);
-}
-
 function weightedScore(point, agent, performer) {
-    return wAgent * distance(point, [agent.x, agent.z]) + wPerformer * distance(point, [performer.x, performer.z]);
+    return wAgent * point.distanceTo(agent.position) + wPerformer * point.distanceTo(performer);
 }
 
 function generateViewingPosition(agent) {
@@ -84,38 +77,26 @@ function init() {
         let maxSpeed = Math.random() * (MAXSPEED - 5) + 5;
         let maxForce = 30 + Math.random() * 40;  
 
-        agents.push({
-            id : i,
-            x: pos[0],
-            y: 2,
-            z: pos[1],
-            vx: v[0],
-            vy: 0,
-            vz: v[1],
-            gx: 0,
-            gy: 0,
-            gz: 0,
-            tx: 50 * (Math.random() < 0.5 ? -1 : 1),
-            ty: 2,
-            tz: pos[1],
-            radius: RADIUS,
-            maxSpeed: maxSpeed,
-            maxForce: maxForce,
-            horizon: HORIZON,
-            yield: false,
-            isWatching: false,
-            k: k,
-        })
+        agents.push(new Agent(
+            pos[0], 2, pos[1],
+            v[0], 0, v[1],
+            0, 0, 0,
+            50 * (Math.random() < 0.5 ? -1 : 1), 2, pos[1],
+            RADIUS, maxSpeed, maxForce, HORIZON, false, 3.0, k
+        ));
+
+        agents[i].setData("id", i);
+        agents[i].setData("isWatching", false);
 
         agentGeometry = new THREE.CylinderGeometry(RADIUS, 1, 4, 16);
         agent = new THREE.Mesh(agentGeometry, pedestrianMat);
         agent.castShadow = true;
         agent.receiveShadow = true;
         agent.userData = {
-            "id": agents[i].id
+            "id": i,
         };
         scene.add(agent);
-        agents[i].agent = agent;
+        agents[i].setData("agent", agent);
         pickableObjects.push(agent);
     }
 
@@ -134,8 +115,11 @@ function init() {
     }); 
 
     points = p.fill();
-    points = points.map(([x, z]) => [x - 50, z - 50]);
-    points = points.filter(([x, z]) => distance([x, z], [performer.x, performer.z]) > MINCOMFORT && distance([x, z], [performer.x, performer.z]) < MAXCOMFORT);
+    points = points.map(([x, z]) => new THREE.Vector3(x - 50, 0, z - 50));
+    points = points.filter(p => {
+        const d = p.distanceTo(performer);
+        return d > MINCOMFORT && d < MAXCOMFORT;
+    });
 
     window.addEventListener("mousedown", mouseDown, false);
 }
@@ -160,36 +144,34 @@ function animate() {
 
     agents.forEach(function(member) {
         // wrap around
-        if (member.x < -50 + RADIUS) { 
-            member.x = 50 - RADIUS;
-            member.z *= -1;
-        } else if (member.x > 50 - RADIUS) {
-            member.x = -50 + RADIUS;
-            member.z *= -1;
+        if (member.position.x < -50 + RADIUS) { 
+            member.position.x = 50 - RADIUS;
+            member.position.z *= -1;
+        } else if (member.position.x > 50 - RADIUS) {
+            member.position.x = -50 + RADIUS;
+            member.position.z *= -1;
         }
 
         // prevent clipping into wall
-        if (member.z > 50 - RADIUS) {
-            member.z = 50 - RADIUS;
+        if (member.position.z > 50 - RADIUS) {
+            member.position.z = 50 - RADIUS;
         }
 
         // pick onlookers
-        if (selected != null && member.id == selected && !member.isWatching) {
-            member.isWatching = true;
+        if (selected != null && member.getData("id") == selected && !member.getData("isWatching")) {
+            member.setData("isWatching", true);
             member.yield = true;
-            [member.tx, member.tz] = generateViewingPosition(member);
+            member.target = generateViewingPosition(member);
             console.log(points.length);
         }
 
-        if (member.isWatching && member.z > 20) {
+        if (member.getData("isWatching") && member.position.z > 20) {
             member.yield = false;
             member.horizon = 1;
         }
 
-        member.agent.position.x = member.x;
-        member.agent.position.y = member.y;
-        member.agent.position.z = member.z;
-        member.agent.material = member.isWatching ? onlookerMat : pedestrianMat;
+        member.getData("agent").position.copy(member.position);
+        member.getData("agent").material = member.getData("isWatching") ? onlookerMat : pedestrianMat;
 
         PHYSICS.update(member, agents);
     });

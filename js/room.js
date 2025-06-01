@@ -1,4 +1,5 @@
 import { createScene } from './environment.js';
+import { Agent } from './agent.js';
 import * as THREE from 'three';
 import * as PHYSICS from 'physics';
 
@@ -19,7 +20,7 @@ init();
 render();
 
 function getPostition() {
-    return [Math.random() * 40 - 45, Math.random() * 90 - 45];
+    return [Math.random() * 90 - 45, Math.random() * 40 - 45];
 }
 
 function getVelocity() {
@@ -83,27 +84,15 @@ function init() {
         let maxSpeed = Math.random() * (MAXSPEED - 5) + 5;
         let maxForce = 30 + Math.random() * 40;  
 
-        agents.push({
-            id : i,
-            x: pos[1],
-            y: 2,
-            z: pos[0],
-            vx: v[0],
-            vy: 0,
-            vz: v[1],
-            gx: 0,
-            gy: 0,
-            gz: 0,
-            tx: 0,
-            ty: 2,
-            tz: 0,
-            radius: RADIUS,
-            horizon: HORIZON,
-            k: k,
-            maxSpeed: maxSpeed,
-            maxForce: maxForce,
-            yield: false,
-        })
+        agents.push(new Agent(
+            pos[0], 2, pos[1],
+            v[0], 0, v[1], 
+            0, 0, 0,
+            0, 2, 0,
+            RADIUS, maxSpeed, maxForce, HORIZON, false, 3.0, k                   
+        ));
+
+        agents[i].setData("id", i);
     }
 
     let agentGeometry, agentMaterial, agent;
@@ -117,7 +106,7 @@ function init() {
         agent.castShadow = true;
         agent.receiveShadow = true;
         scene.add(agent);
-        member.agent = agent;
+        member.setData("agent", agent);
     });
 }
 
@@ -129,49 +118,48 @@ function animate() {
     requestAnimationFrame(animate);
 
     agents.forEach(function(member) {
-        member.agent.position.x = member.x;
-        member.agent.position.y = member.y;
-        member.agent.position.z = member.z;
-        member.agent.material = agentMat;
+        member.getData("agent").position.copy(member.position);
+        member.getData('agent').material = agentMat;
 
-        if (member.z < 25) {
-            if (member.x > LENGTH / 2 - RADIUS) {
-                member.x = LENGTH / 2 - RADIUS; 
-            } else if (member.x < -LENGTH / 2 + RADIUS) {
-                member.x = -LENGTH / 2 + RADIUS; 
-            } else if (member.z > 25-RADIUS && (member.x < -10 || member.x > 10)) {
-                member.z = 25-RADIUS;
-            } else if (member.z < -LENGTH / 2 + RADIUS) {
-                member.z = -LENGTH / 2 + RADIUS;
+        if (member.position.z < 25) {
+            if (member.position.x > LENGTH / 2 - RADIUS) {
+                member.position.x = LENGTH / 2 - RADIUS; 
+            } else if (member.position.x < -LENGTH / 2 + RADIUS) {
+                member.position.x = -LENGTH / 2 + RADIUS; 
+            } else if (member.position.z > 25-RADIUS && (member.position.x < -10 || member.position.x > 10)) {
+                member.position.z = 25-RADIUS;
+            } else if (member.position.z < -LENGTH / 2 + RADIUS) {
+                member.position.z = -LENGTH / 2 + RADIUS;
             }
             
-            if (member.x > 10) {
-                member.tx = -10;
-            } else if (member.x < -10) {
-                member.tx = 10;
+            if (member.position.x > 10) {
+                member.target.x = -10;
+            } else if (member.position.x < -10) {
+                member.target.x = 10;
             } else {
-                member.tx = 0;
+                member.target.x = 0;
             }
 
-            member.tz = 27.5;
+            member.target.z = 27.5;
         }
 
-        if (member.z >= 25) {
-            if (member.x > 10 - RADIUS) {
-                member.x = 10 - RADIUS;
-            } else if (member.x < -10 + RADIUS) {
-                member.x = -10 + RADIUS;
-            } else if (member.z < -LENGTH / 2 + RADIUS) {
-                member.z = -LENGTH / 2 + RADIUS;
-            } else if (member.x < -10 || member.x > 10) {
-                member.z = -RADIUS;
+        if (member.position.z >= 25) {
+            if (member.position.x > 10 - RADIUS) {
+                member.position.x = 10 - RADIUS;
+            } else if (member.position.x < -10 + RADIUS) {
+                member.position.x = -10 + RADIUS;
+            } else if (member.position.z < -LENGTH / 2 + RADIUS) {
+                member.position.z = -LENGTH / 2 + RADIUS;
+            } else if (member.position.x < -10 || member.position.x > 10) {
+                member.position.z = -RADIUS;
             }
 
-            member.tz = 200;
+            member.target.z = 200;
         }
 
         PHYSICS.update(member, agents);
     });
+
     renderer.render(scene, camera);
 };
 

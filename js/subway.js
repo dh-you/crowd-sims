@@ -1,4 +1,5 @@
 import { createScene } from './environment.js';
+import { Agent } from './agent.js';
 import * as THREE from 'three';
 import * as PHYSICS from 'physics';
 
@@ -118,30 +119,15 @@ function init() {
         let maxSpeed = Math.random() * (MAXSPEED - 5) + 5;
         let maxForce = 30 + Math.random() * 40;  
 
-        agents.push({
-            id : i,
-            x: getPostition(27, 48),
-            y: 2,
-            z: getPostition(-39, 39),
-            vx: v[0],
-            vy: 0,
-            vz: v[1],
-            gx: 0,
-            gy: 0,
-            gz: 0,
-            tx: 0,
-            ty: 2,
-            tz: 0,
-            radius: RADIUS,
-            maxSpeed: maxSpeed,
-            maxForce: maxForce,
-            horizon: HORIZON,
-            k: k,
-            fx: 0,
-            fz: 0,
-            yield: false,
-            group: 1,
-        });
+        agents.push(new Agent(
+            getPostition(27, 48), 2, getPostition(-39, 39),
+            v[0], 0, v[1],
+            0, 0, 0,
+            0, 2, 0,
+            RADIUS, maxSpeed, maxForce, HORIZON, false, 3.0, k,
+        ));
+        agents[i].setData("id", i);
+        agents[i].setData("group", 1);
     }
 
     for (let i = 0; i < COUNT; i++) {
@@ -151,30 +137,15 @@ function init() {
         let maxSpeed = Math.random() * (MAXSPEED - 5) + 5;
         let maxForce = 30 + Math.random() * 40;  
 
-        agents.push({
-            id : i + COUNT,
-            x: getPostition(0, 23),
-            y: 2,
-            z: getPostition(-39, 39),
-            vx: v[0],
-            vy: 0,
-            vz: v[1],
-            gx: 0,
-            gy: 0,
-            gz: 0,
-            tx: 0,
-            ty: 2,
-            tz: 0,
-            radius: RADIUS,
-            maxSpeed: maxSpeed,
-            maxForce: maxForce,
-            horizon: HORIZON,
-            k: k,
-            fx: 0,
-            fz: 0,
-            yield: true,
-            group: 2,
-        });
+        agents.push(new Agent(
+            getPostition(0, 23), 2, getPostition(-39, 39),
+            v[0], 0, v[1],
+            0, 0, 0,
+            0, 2, 0,
+            RADIUS, maxSpeed, maxForce, HORIZON, true, 3.0, k
+        ));
+        agents[i + COUNT].setData("id", i + COUNT);
+        agents[i + COUNT].setData("group", 2);
     }
 
     let agentGeometry, agent;
@@ -185,14 +156,14 @@ function init() {
         agent.castShadow = true;
         agent.receiveShadow = true;
         scene.add(agent);
-        agents[i].agent = agent;
+        agents[i].setData("agent", agent);
 
         agentGeometry = new THREE.CylinderGeometry(agents[i + COUNT].radius, 1, 4, 16);
         agent = new THREE.Mesh(agentGeometry, group2Mat);
         agent.castShadow = true;
         agent.receiveShadow = true;
         scene.add(agent);
-        agents[i + COUNT].agent = agent;
+        agents[i + COUNT].setData("agent", agent);
     }
 
     console.log(agents.length);
@@ -206,57 +177,8 @@ function animate() {
     requestAnimationFrame(animate);
 
     agents.forEach(function(member) {
-        member.agent.position.x = member.x;
-        member.agent.position.y = member.y;
-        member.agent.position.z = member.z;
-        member.agent.material = member.group == 1 ? group1Mat : group2Mat;
-
-        if (member.z > -50 && member.z < - 17) {
-            member.tz = -28;
-        } else if (member.z > -17 && member.z < 16) {
-            member.tz = 0;
-        } else if (member.z > 16 && member.z < 49) {
-            member.tz = 28;
-        }
-
-        if (member.x > 25) {
-            if ((member.z > -50 && member.z < -34) || (member.z > -22 && member.z < -6) || (member.z > 6 && member.z < 22) || (member.z > 34 && member.z < 50)) {
-                if (member.x < 25 + RADIUS + 0.1) {
-                    member.x = 25 + RADIUS + 0.1;
-                }
-            }
-        } else if (member.x < 25) {
-            if ((member.z > -50 && member.z < -34) || (member.z > -22 && member.z < -6) || (member.z > 6 && member.z < 22) || (member.z > 34 && member.z < 50)) {
-                if (member.x > 25 - RADIUS - 0.1) {
-                    member.x = 25 - RADIUS - 0.1;
-                }
-            }
-        }
-
-        if (member.z > 50 - RADIUS) {
-            member.z = 50 - RADIUS;
-        }
-
-        if (member.group == 1) {
-            if (member.x > 25) {
-                member.tx = 23;
-                member.fx = getPostition(-45, 0);
-                member.fz = getPostition(-39, 39);
-            } else {
-                member.tx = member.fx;
-                member.tz = member.fz;
-            }
-        } else {
-            if (member.x < 25) {
-                member.tx = 27;
-                member.fx = getPostition(27, 48);
-                member.fz = getPostition(-39, 39);
-            } else {
-                member.tx = member.fx;
-                member.tz = member.fz;
-            }
-        }
-
+        member.getData("agent").position.copy(member.position);
+        member.getData("agent").material = member.getData("group") == 1 ? group1Mat : group2Mat;
 
         PHYSICS.update(member, agents);
     });

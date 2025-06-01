@@ -1,4 +1,5 @@
 import { createScene } from './environment.js';
+import { Agent } from './agent.js';
 import * as THREE from 'three';
 import * as PHYSICS from 'physics';
 
@@ -82,27 +83,15 @@ function init() {
         let maxSpeed = Math.random() * (MAXSPEED - 5) + 5;
         let maxForce = 30 + Math.random() * 40;  
 
-        agents.push({
-            id : i,
-            x: pos[0],
-            y: 2,
-            z: pos[1],
-            vx: v[0],
-            vy: 0,
-            vz: v[1],
-            gx: 0,
-            gy: 0,
-            gz: 0,
-            tx: 0,
-            ty: 2,
-            tz: pos[1],
-            radius: RADIUS,
-            maxSpeed: maxSpeed,
-            horizon: HORIZON,
-            k: k,
-            yield: false,
-            maxForce: maxForce,
-        })
+        agents.push(new Agent(
+            pos[0], 2, pos[1],            
+            v[0], 0, v[1],
+            0, 0, 0,
+            0, 2, pos[1],            
+            RADIUS, maxSpeed, maxForce, HORIZON, false, 3.0, k
+        ));
+
+        agents[i].setData("id", i);
     }
 
     let agentGeometry, agentMaterial, agent;
@@ -116,7 +105,7 @@ function init() {
         agent.castShadow = true;
         agent.receiveShadow = true;
         scene.add(agent);
-        member.agent = agent;
+        member.setData("agent", agent);
     });
 }
 
@@ -128,78 +117,76 @@ function animate() {
     requestAnimationFrame(animate);
 
     agents.forEach(function(member) {
-        member.agent.position.x = member.x;
-        member.agent.position.y = member.y;
-        member.agent.position.z = member.z;
-        member.agent.material = agentMat;
+        member.getData("agent").position.copy(member.position);
+        member.getData("agent").material = agentMat;
 
-        if (member.z > LENGTH / 2 - RADIUS) {
-            member.z = LENGTH / 2 - RADIUS;
-        } else if (member.z < -LENGTH / 2 + RADIUS) {
-            member.z = -LENGTH / 2 + RADIUS;
+        if (member.position.z > LENGTH / 2 - RADIUS) {
+            member.position.z = LENGTH / 2 - RADIUS;
+        } else if (member.position.z < -LENGTH / 2 + RADIUS) {
+            member.position.z = -LENGTH / 2 + RADIUS;
         }
 
-        if (member.z < 0) {
-            member.tz = -12.5;
+        if (member.position.z < 0) {
+            member.target.z = -12.5;
         } else {
-            member.tz = 12.5;
+            member.target.z = 12.5;
         }
 
-        member.tx = -32.5;
+        member.target.x = -32.5;
         member.maxSpeed = MAXSPEED;
 
-        if (member.x >= -30 && member.x <= 30) {
-            if (member.z < 0) {
-                if (member.z > -15 && member.z < -10) {
+        if (member.position.x >= -30 && member.position.x <= 30) {
+            if (member.position.z < 0) {
+                if (member.position.z > -15 && member.position.z < -10) {
                     member.maxSpeed = MAXSPEED * 1.5;
 
-                    if (member.z < -15 + RADIUS) {
-                        member.z = -15 + RADIUS;
-                    } else if (member.z > -10 - RADIUS) {
-                        member.z = -10 - RADIUS;
+                    if (member.position.z < -15 + RADIUS) {
+                        member.position.z = -15 + RADIUS;
+                    } else if (member.position.z > -10 - RADIUS) {
+                        member.position.z = -10 - RADIUS;
                     }
-                    
+
                 } else {
-                    if (member.z < -12.5 && member.z > -15 - RADIUS) {
-                        member.z = -15 - RADIUS;
-                    } else if (member.z > -12.5 && member.z < -10 + RADIUS) {
-                        member.z = -10 + RADIUS;
+                    if (member.position.z < -12.5 && member.position.z > -15 - RADIUS) {
+                        member.position.z = -15 - RADIUS;
+                    } else if (member.position.z > -12.5 && member.position.z < -10 + RADIUS) {
+                        member.position.z = -10 + RADIUS;
                     }
-                } 
+                }
             } else {
-                if (member.z > 10 && member.z < 15) {
+                if (member.position.z > 10 && member.position.z < 15) {
                     member.maxSpeed = MAXSPEED * 1.5;
 
-                    if (member.z < 10 + RADIUS) {
-                        member.z = 10 + RADIUS;
-                    } else if (member.z > 15 - RADIUS) {
-                        member.z = 15 - RADIUS;
+                    if (member.position.z < 10 + RADIUS) {
+                        member.position.z = 10 + RADIUS;
+                    } else if (member.position.z > 15 - RADIUS) {
+                        member.position.z = 15 - RADIUS;
                     }
 
                 } else {
-                    if (member.z > 12.5 && member.z < 15 + RADIUS) {
-                        member.z = 15 + RADIUS;
-                    } else if (member.z < 12.5 && member.z > 10 - RADIUS) {
-                        member.z = 10 - RADIUS;
+                    if (member.position.z > 12.5 && member.position.z < 15 + RADIUS) {
+                        member.position.z = 15 + RADIUS;
+                    } else if (member.position.z < 12.5 && member.position.z > 10 - RADIUS) {
+                        member.position.z = 10 - RADIUS;
                     }
                 }
             }
         }
 
-        if (Math.abs(member.x + 32.5) <= 7.5 && member.z > -15 && member.z < -10) {
-            member.tx = 200;
-        } else if (Math.abs(member.x + 32.5) <= 7.5 && member.z > 10 && member.z < 15) {
-            member.tx = 200;
+        if (Math.abs(member.position.x + 32.5) <= 7.5 && member.position.z > -15 && member.position.z < -10) {
+            member.target.x = 200;
+        } else if (Math.abs(member.position.x + 32.5) <= 7.5 && member.position.z > 10 && member.position.z < 15) {
+            member.target.x = 200;
         }
 
-        if (member.x >= -30 && member.z > -15 && member.z < -10) {
-            member.tx = 200;
-        } else if (member.x >= -30 && member.z > 10 && member.z < 15) {
-            member.tx = 200;
+        if (member.position.x >= -30 && member.position.z > -15 && member.position.z < -10) {
+            member.target.x = 200;
+        } else if (member.position.x >= -30 && member.position.z > 10 && member.position.z < 15) {
+            member.target.x = 200;
         }
 
-        if (member.x >= 25) {
-            member.tx = 200;
+        if (member.position.x >= 25) {
+            member.target.x = 200;
         }
 
         PHYSICS.update(member, agents);
