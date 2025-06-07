@@ -14,6 +14,7 @@ export class Agent {
         this.yieldFactor = yieldFactor;
         this.k = k;
         this.userData = {};
+        this.sphere = new THREE.Sphere(new THREE.Vector3(), radius);
     }
 
     setData(label, data) {

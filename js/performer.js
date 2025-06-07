@@ -58,7 +58,6 @@ function getVelocity() {
 }
 
 function init() {
-    // street 
     const streetMaterial = new THREE.MeshPhongMaterial({ color: 0x222222, side: THREE.DoubleSide });
     const streetGeometry = new THREE.PlaneGeometry(100, 30);
     const streetPlane = new THREE.Mesh(streetGeometry, streetMaterial);
@@ -100,14 +99,12 @@ function init() {
         pickableObjects.push(agent);
     }
 
-    // performer
     agent = new THREE.Mesh(agentGeometry, performerMat);
     agent.castShadow = true;
     agent.receiveShadow = true;
     agent.position.set(performer.x, performer.y, performer.z);
     scene.add(agent);
 
-    // poisson disc points
     var p = new FastPoissonDiskSampling({
         shape: [100, 100],
         radius: 2 * RADIUS,
@@ -143,7 +140,6 @@ function animate() {
     requestAnimationFrame(animate);
 
     agents.forEach(function(member) {
-        // wrap around
         if (member.position.x < -50 + RADIUS) { 
             member.position.x = 50 - RADIUS;
             member.position.z *= -1;
@@ -152,12 +148,6 @@ function animate() {
             member.position.z *= -1;
         }
 
-        // prevent clipping into wall
-        if (member.position.z > 50 - RADIUS) {
-            member.position.z = 50 - RADIUS;
-        }
-
-        // pick onlookers
         if (selected != null && member.getData("id") == selected && !member.getData("isWatching")) {
             member.setData("isWatching", true);
             member.yield = true;

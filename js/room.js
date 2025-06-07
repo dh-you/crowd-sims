@@ -1,11 +1,11 @@
 import { createScene } from './environment.js';
 import { Agent } from './agent.js';
+import { Wall } from './wall.js';
 import * as THREE from 'three';
 import * as PHYSICS from 'physics';
 
-const LENGTH = 100;
-
 let agents = [];
+let walls = [];
 const COUNT = 150;
 const RADIUS = 1;
 const MAXSPEED = 10;
@@ -31,50 +31,21 @@ function getVelocity() {
 }
 
 function init() {
-    // walls 
-    const wallMaterial = new THREE.MeshBasicMaterial({color: 0x222222, side: THREE.DoubleSide});
+    const wallsData = [
+        [100, 4, true, new THREE.Vector3(0, 2, -50)],
+        [75, 4, false, new THREE.Vector3(50, 2, -12.5)],
+        [75, 4, false, new THREE.Vector3(-50, 2, -12.5)],
+        [40, 4, true, new THREE.Vector3(30, 2, 25)],
+        [40, 4, true, new THREE.Vector3(-30, 2, 25)],
+        [25, 4, false, new THREE.Vector3(10, 2, 37.5)],
+        [25, 4, false, new THREE.Vector3(-10, 2, 37.5)],
+    ];
 
-    const geometry1 = new THREE.PlaneGeometry(100, 4);
-    const plane1 = new THREE.Mesh(geometry1, wallMaterial);
-    plane1.rotation.set(Math.PI, 0, 0);
-    plane1.position.set(0, 2, -50);
-    scene.add(plane1);
-
-    const geometry2 = new THREE.PlaneGeometry(75, 4);
-    const plane2 = new THREE.Mesh(geometry2, wallMaterial);
-    plane2.rotation.set(0, Math.PI / 2, 0);
-    plane2.position.set(50, 2, -12.5);
-    scene.add(plane2);
-
-    const geometry3 = new THREE.PlaneGeometry(75, 4);
-    const plane3 = new THREE.Mesh(geometry3, wallMaterial);
-    plane3.rotation.set(0, Math.PI / 2, 0);
-    plane3.position.set(-50, 2, -12.5);
-    scene.add(plane3);
-
-    const geometry4 = new THREE.PlaneGeometry(40, 4);
-    const plane4 = new THREE.Mesh(geometry4, wallMaterial);
-    plane4.rotation.set(Math.PI, 0, 0);
-    plane4.position.set(30, 2, 25);
-    scene.add(plane4);
-
-    const geometry5 = new THREE.PlaneGeometry(40, 4);
-    const plane5 = new THREE.Mesh(geometry5, wallMaterial);
-    plane5.rotation.set(Math.PI, 0, 0);
-    plane5.position.set(-30, 2, 25);
-    scene.add(plane5);
-
-    const geometry6 = new THREE.PlaneGeometry(25, 4);
-    const plane6 = new THREE.Mesh(geometry6, wallMaterial);
-    plane6.rotation.set(0, Math.PI / 2, 0);
-    plane6.position.set(10, 2, 37.5);
-    scene.add(plane6);
-
-    const geometry7 = new THREE.PlaneGeometry(25, 4);
-    const plane7 = new THREE.Mesh(geometry7, wallMaterial);
-    plane7.rotation.set(0, Math.PI / 2, 0);
-    plane7.position.set(-10, 2, 37.5);
-    scene.add(plane7);
+    wallsData.forEach(([width, height, vertical, position]) => {
+        const wall = new Wall(width, height, vertical, position);
+        scene.add(wall.mesh);
+        walls.push(wall);
+    });
 
     for (let i = 0; i < COUNT; i++) {
         let v = getVelocity();
@@ -118,20 +89,7 @@ function animate() {
     requestAnimationFrame(animate);
 
     agents.forEach(function(member) {
-        member.getData("agent").position.copy(member.position);
-        member.getData('agent').material = agentMat;
-
-        if (member.position.z < 25) {
-            if (member.position.x > LENGTH / 2 - RADIUS) {
-                member.position.x = LENGTH / 2 - RADIUS; 
-            } else if (member.position.x < -LENGTH / 2 + RADIUS) {
-                member.position.x = -LENGTH / 2 + RADIUS; 
-            } else if (member.position.z > 25-RADIUS && (member.position.x < -10 || member.position.x > 10)) {
-                member.position.z = 25-RADIUS;
-            } else if (member.position.z < -LENGTH / 2 + RADIUS) {
-                member.position.z = -LENGTH / 2 + RADIUS;
-            }
-            
+        if (member.position.z < 25) {            
             if (member.position.x > 10) {
                 member.target.x = -10;
             } else if (member.position.x < -10) {
@@ -139,25 +97,27 @@ function animate() {
             } else {
                 member.target.x = 0;
             }
-
             member.target.z = 27.5;
         }
 
         if (member.position.z >= 25) {
-            if (member.position.x > 10 - RADIUS) {
-                member.position.x = 10 - RADIUS;
-            } else if (member.position.x < -10 + RADIUS) {
-                member.position.x = -10 + RADIUS;
-            } else if (member.position.z < -LENGTH / 2 + RADIUS) {
-                member.position.z = -LENGTH / 2 + RADIUS;
-            } else if (member.position.x < -10 || member.position.x > 10) {
-                member.position.z = -RADIUS;
-            }
-
             member.target.z = 200;
         }
+    });
 
+    agents.forEach(function(member) {
         PHYSICS.update(member, agents);
+    });
+
+    agents.forEach(function(agent) {
+        walls.forEach(function(wall) {
+            wall.collisionResolve(agent);
+        });
+    });
+
+    agents.forEach(function(member) {
+        member.getData("agent").position.copy(member.position);
+        member.getData('agent').material = agentMat;
     });
 
     renderer.render(scene, camera);
