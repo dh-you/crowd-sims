@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 const TIMESTEP = 0.005;
 const EPSILON = 0.001;
+const sideStepStrength = 0.5;
 
 function timeToCollision(agent, neighbor) {
     let r = agent.radius + neighbor.radius;
@@ -55,20 +56,36 @@ export function update(agent, agents) {
     let fzAvoid = 0;
 
     agents.forEach(function(neighbor) {
-        if (neighbor.getData("id") != agent.getData("id")) {
+        if (neighbor.id != agent.id) {
             let t = timeToCollision(agent, neighbor);
 
             let dir = new THREE.Vector3(
                 (agent.position.x + agent.velocity.x * t) - (neighbor.position.x + neighbor.velocity.x * t),
                 0,
                 (agent.position.z + agent.velocity.z * t) - (neighbor.position.z + neighbor.velocity.z * t)
-            );
+            ).normalize();
 
-            dir.normalize();
-        
+            let left = dir.clone().applyAxisAngle(new THREE.Vector3(0,1,0), Math.PI / 2);
+            let right = dir.clone().applyAxisAngle(new THREE.Vector3(0,1,0), -Math.PI / 2);
+            
+            let leftDot = left.dot(neighbor.velocity);
+            let rightDot = right.dot(neighbor.velocity);
+
+            let sidestep;
+            if (leftDot < 0 && rightDot < 0) {
+                sidestep = leftDot < rightDot ? left : right;
+            } else if (leftDot > 0 && rightDot > 0) {
+                sidestep = leftDot < rightDot ? right : left;
+            } else {
+                sidestep = leftDot < 0 ? left : right;
+            }
+
             if (t >= 0 && t <= agent.horizon) {
-                fxAvoid += (agent.yieldStatus ? agent.yieldFactor : 1) * dir.x * (agent.horizon - t) / (t + EPSILON);
-                fzAvoid += (agent.yieldStatus ? agent.yieldFactor : 1) * dir.z * (agent.horizon - t) / (t + EPSILON);
+                fxAvoid += dir.x * (agent.horizon - t) / (t + EPSILON);
+                fzAvoid += dir.z * (agent.horizon - t) / (t + EPSILON);
+
+                fxAvoid += sideStepStrength * sidestep.x * (agent.horizon - t) / (t + EPSILON);
+                fzAvoid += sideStepStrength * sidestep.z * (agent.horizon - t) / (t + EPSILON);
             }
         }
     });

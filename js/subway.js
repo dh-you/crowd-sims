@@ -120,13 +120,13 @@ function init() {
         let maxForce = 30 + Math.random() * 40;  
 
         agents.push(new Agent(
+            i,
             getPostition(27, 48), 2, getPostition(-39, 39),
             v[0], 0, v[1],
             0, 0, 0,
             0, 2, 0,
-            RADIUS, maxSpeed, maxForce, HORIZON, false, 3.0, k,
+            RADIUS, maxSpeed, maxForce, HORIZON, k
         ));
-        agents[i].setData("id", i);
         agents[i].setData("group", 1);
     }
 
@@ -138,13 +138,13 @@ function init() {
         let maxForce = 30 + Math.random() * 40;  
 
         agents.push(new Agent(
+            i + COUNT,
             getPostition(0, 23), 2, getPostition(-39, 39),
             v[0], 0, v[1],
             0, 0, 0,
             0, 2, 0,
-            RADIUS, maxSpeed, maxForce, HORIZON, true, 3.0, k
+            RADIUS, maxSpeed, maxForce, HORIZON, k
         ));
-        agents[i + COUNT].setData("id", i + COUNT);
         agents[i + COUNT].setData("group", 2);
     }
 
@@ -177,10 +177,12 @@ function animate() {
     requestAnimationFrame(animate);
 
     agents.forEach(function(member) {
+        PHYSICS.update(member, agents);
+    });
+
+    agents.forEach(function(member) {
         member.getData("agent").position.copy(member.position);
         member.getData("agent").material = member.getData("group") == 1 ? group1Mat : group2Mat;
-
-        PHYSICS.update(member, agents);
     });
 
     renderer.render(scene, camera);

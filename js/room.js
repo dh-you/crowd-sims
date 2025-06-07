@@ -56,14 +56,13 @@ function init() {
         let maxForce = 30 + Math.random() * 40;  
 
         agents.push(new Agent(
+            i,
             pos[0], 2, pos[1],
             v[0], 0, v[1], 
             0, 0, 0,
             0, 2, 0,
-            RADIUS, maxSpeed, maxForce, HORIZON, false, 3.0, k                   
+            RADIUS, maxSpeed, maxForce, HORIZON, k                   
         ));
-
-        agents[i].setData("id", i);
     }
 
     let agentGeometry, agentMaterial, agent;

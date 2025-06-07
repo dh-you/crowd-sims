@@ -24,8 +24,8 @@ export class Wall {
             const dist = push.length();
             push.normalize();
 
-            const penetrationDepth = agent.radius - dist;
-            agent.position.add(push.multiplyScalar(penetrationDepth));
+            const penetration = agent.radius - dist;
+            agent.position.add(push.multiplyScalar(penetration));
         }
     }
 }

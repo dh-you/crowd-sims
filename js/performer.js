@@ -77,14 +77,14 @@ function init() {
         let maxForce = 30 + Math.random() * 40;  
 
         agents.push(new Agent(
+            i,
             pos[0], 2, pos[1],
             v[0], 0, v[1],
             0, 0, 0,
             50 * (Math.random() < 0.5 ? -1 : 1), 2, pos[1],
-            RADIUS, maxSpeed, maxForce, HORIZON, false, 3.0, k
+            RADIUS, maxSpeed, maxForce, HORIZON, k
         ));
 
-        agents[i].setData("id", i);
         agents[i].setData("isWatching", false);
 
         agentGeometry = new THREE.CylinderGeometry(RADIUS, 1, 4, 16);
@@ -148,15 +148,13 @@ function animate() {
             member.position.z *= -1;
         }
 
-        if (selected != null && member.getData("id") == selected && !member.getData("isWatching")) {
+        if (selected != null && member.id == selected && !member.getData("isWatching")) {
             member.setData("isWatching", true);
-            member.yield = true;
             member.target = generateViewingPosition(member);
             console.log(points.length);
         }
 
         if (member.getData("isWatching") && member.position.z > 20) {
-            member.yield = false;
             member.horizon = 1;
         }
 
