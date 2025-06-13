@@ -8,7 +8,7 @@ const LENGTH = 100;
 
 let agents = [];
 let walls = [];
-const COUNT = 125;
+const COUNT = 75;
 const RADIUS = 1;
 const MAXSPEED = 7.5;
 const HORIZON = 50;

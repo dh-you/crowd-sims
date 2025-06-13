@@ -64,7 +64,7 @@ function init() {
         wallTargets.push(new THREE.Vector3(wall.mesh.position.x, 2, wall.mesh.position.z - 200));
     });
 
-    const floorMaterial = new THREE.MeshPhongMaterial({ color: 0x555555, side: THREE.DoubleSide });
+    const floorMaterial = new THREE.MeshPhongMaterial({ color: 0x222222, side: THREE.DoubleSide });
 
     const geometry9 = new THREE.PlaneGeometry(100, 15);
     const plane9 = new THREE.Mesh(geometry9, floorMaterial);
@@ -84,7 +84,7 @@ function init() {
 
         agents.push(new Agent(
             i,
-            getPostition(37.5, 47.5), 2, getPostition(-39, 39),
+            getPostition(40, 47.5), 2, getPostition(-39, 39),
             v[0], 0, v[1],
             0, 0, 0,
             0, 2, 0,
@@ -181,20 +181,20 @@ function animate() {
 
     agents.forEach(function(member) {
         if (member.getData("group") == 1) {
-            if (member.position.x > 35+RADIUS) {
+            if (member.position.x > 35 + RADIUS && !assigned[member.id]) {
                 member.target.z = nearestDoor(member.position.z);
-                member.target.x = 35;
+                member.target.x = 35 - 0.5;
             } else if (!assigned[member.id]) {
                 member.target.x = getPostition(0, 23);
                 member.target.z = getPostition(-39, 39);
                 assigned[member.id] = true;
             }
         } else {
-           if (member.position.x < 35-RADIUS) {
+           if (member.position.x < 35 - RADIUS && !assigned[member.id]) {
                 member.target.z = nearestDoor(member.position.z);
-                member.target.x = 35;
+                member.target.x = 35 + 0.5;
             } else if (!assigned[member.id]) {
-                member.target.x = getPostition(37.5, 47.5);
+                member.target.x = getPostition(40, 47.5);
                 member.target.z = getPostition(-39, 39);
                 assigned[member.id] = true;
             } 
@@ -209,6 +209,11 @@ function animate() {
         walls.forEach(function(wall) {
             wall.collisionResolve(agent);
         });
+    });
+
+    agents.forEach(function(member) {
+        member.getData("agent").position.copy(member.position);
+        member.getData("agent").material = member.getData("group") == 1 ? group1Mat : group2Mat;
     });
 
     agents.forEach(function(member) {

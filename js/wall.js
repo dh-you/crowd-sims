@@ -1,7 +1,11 @@
 import * as THREE from 'three';
 
 const thickness = 0.5;
-const wallMaterial = new THREE.MeshBasicMaterial({color: 0x222222, side: THREE.DoubleSide});
+const wallMaterial = new THREE.MeshStandardMaterial({
+    color: 0xe3e3e3,
+    metalness: 0.4,
+    roughness: 0.3
+});
 
 export class Wall {
     constructor(width, height, vertical, position) {
