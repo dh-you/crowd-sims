@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 
+const thickness = 0.5;
 const wallMaterial = new THREE.MeshBasicMaterial({color: 0x222222, side: THREE.DoubleSide});
 
 export class Wall {
     constructor(width, height, vertical, position) {
-        const thickness = 0.1;
         const geometry = vertical ? new THREE.BoxGeometry(width, height, thickness) : new THREE.BoxGeometry(thickness, height, width);
         this.mesh = new THREE.Mesh(geometry, wallMaterial);
         this.mesh.position.copy(position);

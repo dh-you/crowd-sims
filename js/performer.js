@@ -157,11 +157,15 @@ function animate() {
         if (member.getData("isWatching") && member.position.z > 20) {
             member.horizon = 1;
         }
+    });
 
+    agents.forEach(function(member) {
+        PHYSICS.update(member, agents);
+    });
+
+    agents.forEach(function(member) {
         member.getData("agent").position.copy(member.position);
         member.getData("agent").material = member.getData("isWatching") ? onlookerMat : pedestrianMat;
-
-        PHYSICS.update(member, agents);
     });
 
     renderer.render(scene, camera);
