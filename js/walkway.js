@@ -4,14 +4,13 @@ import { Wall } from './wall.js';
 import * as THREE from 'three';
 import * as PHYSICS from 'physics';
 
-const LENGTH = 100;
-
 let agents = [];
 let walls = [];
 const COUNT = 75;
 const RADIUS = 1;
 const MAXSPEED = 7.5;
 const HORIZON = 50;
+const LENGTH = 100;
 
 const agentMat = new THREE.MeshLambertMaterial({
     color: 0x00ff00
@@ -26,8 +25,8 @@ function getPostition() {
 }
 
 function getVelocity() {
-    let theta = Math.random() * Math.PI * 2;
-    let speed = Math.random() * MAXSPEED;
+    const theta = Math.random() * Math.PI * 2;
+    const speed = Math.random() * MAXSPEED;
 
     return [speed * Math.cos(theta), speed * Math.sin(theta)];
 }
@@ -64,12 +63,12 @@ function init() {
     scene.add(street2);
 
     for (let i = 0; i < COUNT; i++) {
-        let v = getVelocity();
-        let pos = getPostition();
+        const v = getVelocity();
+        const pos = getPostition();
 
-        let k = 1.5 + Math.random() * 1.5;
-        let maxSpeed = Math.random() * (MAXSPEED - 5) + 5;
-        let maxForce = 30 + Math.random() * 40;  
+        const k = 1.5 + Math.random() * 1.5;
+        const maxSpeed = Math.random() * (MAXSPEED - 5) + 5;
+        const maxForce = 30 + Math.random() * 40;
 
         agents.push(new Agent(
             i,
@@ -81,14 +80,12 @@ function init() {
         ));
     }
 
-    let agentGeometry, agentMaterial, agent;
-
     agents.forEach(function(member) {
-        agentGeometry = new THREE.CylinderGeometry(member.radius, 1, 4, 16);
-        agentMaterial = new THREE.MeshLambertMaterial({
+        const agentGeometry = new THREE.CylinderGeometry(member.radius, 1, 4, 16);
+        const agentMaterial = new THREE.MeshLambertMaterial({
             color: 0x00ff00
         });
-        agent = new THREE.Mesh(agentGeometry, agentMaterial);
+        const agent = new THREE.Mesh(agentGeometry, agentMaterial);
         agent.castShadow = true;
         agent.receiveShadow = true;
         scene.add(agent);

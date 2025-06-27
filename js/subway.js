@@ -6,15 +6,16 @@ import * as PHYSICS from 'physics';
 
 let agents = [];
 let walls = [];
+const COUNT = 20;
+const RADIUS = 1;
+const MAXSPEED = 5;
+const HORIZON = 100;
+
 const gaps = [-33, -11, 11, 33];  
 let wallTargets = [];
 let agentsTargets = [];
 let assigned = [];
 let floor;
-const COUNT = 20;
-const RADIUS = 1;
-const MAXSPEED = 5;
-const HORIZON = 100;
 
 const group1Mat = new THREE.MeshLambertMaterial({
     color: 0x00ff00
@@ -76,11 +77,11 @@ function init() {
     scene.add(plane9);
 
     for (let i = 0; i < COUNT; i++) {
-        let v = getVelocity();
+        const v = getVelocity();
 
-        let k = 1.5 + Math.random() * 1.5;
-        let maxSpeed = Math.random() * (MAXSPEED - 5) + 5;
-        let maxForce = 30 + Math.random() * 40;  
+        const k = 1.5 + Math.random() * 1.5;
+        const maxSpeed = Math.random() * (MAXSPEED - 5) + 5;
+        const maxForce = 30 + Math.random() * 40;  
 
         agents.push(new Agent(
             i,
@@ -97,11 +98,11 @@ function init() {
     }
 
     for (let i = 0; i < COUNT; i++) {
-        let v = getVelocity();
+        const v = getVelocity();
 
-        let k = 1.5 + Math.random() * 1.5;
-        let maxSpeed = Math.random() * (MAXSPEED - 5) + 5;
-        let maxForce = 30 + Math.random() * 40;  
+        const k = 1.5 + Math.random() * 1.5;
+        const maxSpeed = Math.random() * (MAXSPEED - 5) + 5;
+        const maxForce = 30 + Math.random() * 40;  
 
         agents.push(new Agent(
             i + COUNT,
@@ -114,22 +115,20 @@ function init() {
         agents[i + COUNT].setData("group", 2);
     }
 
-    let agentGeometry, agent;
-
     for (let i = 0; i < COUNT; i++) {
-        agentGeometry = new THREE.CylinderGeometry(agents[i].radius, 1, 4, 16);
-        agent = new THREE.Mesh(agentGeometry, group1Mat);
-        agent.castShadow = true;
-        agent.receiveShadow = true;
-        scene.add(agent);
-        agents[i].setData("agent", agent);
+        const agentGeometry1 = new THREE.CylinderGeometry(agents[i].radius, 1, 4, 16);
+        const agent1 = new THREE.Mesh(agentGeometry1, group1Mat);
+        agent1.castShadow = true;
+        agent1.receiveShadow = true;
+        scene.add(agent1);
+        agents[i].setData("agent", agent1);
 
-        agentGeometry = new THREE.CylinderGeometry(agents[i + COUNT].radius, 1, 4, 16);
-        agent = new THREE.Mesh(agentGeometry, group2Mat);
-        agent.castShadow = true;
-        agent.receiveShadow = true;
-        scene.add(agent);
-        agents[i + COUNT].setData("agent", agent);
+        const agentGeometry2 = new THREE.CylinderGeometry(agents[i + COUNT].radius, 1, 4, 16);
+        const agent2 = new THREE.Mesh(agentGeometry2, group2Mat);
+        agent2.castShadow = true;
+        agent2.receiveShadow = true;
+        scene.add(agent2);
+        agents[i + COUNT].setData("agent", agent2);
     }
 }
 

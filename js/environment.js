@@ -4,7 +4,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 const LENGTH = 100;
 
 let renderer, scene, camera;
-let world = {
+const world = {
     x: LENGTH,
     z: LENGTH
 };

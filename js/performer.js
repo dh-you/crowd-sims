@@ -3,24 +3,23 @@ import { Agent } from './agent.js';
 import * as THREE from 'three';
 import * as PHYSICS from 'physics';
 
-let pickableObjects = [];
-let selected = null;
-let mouse = new THREE.Vector2();
-const raycaster = new THREE.Raycaster();
-
+let agents = [];
 const COUNT = 50;
 const RADIUS = 1;
 const MAXSPEED = 7.5;
 const HORIZON = 100;
 
+let performer = new THREE.Vector3(0, 2, 45);
+let points;
 const MINCOMFORT = 10;
 const MAXCOMFORT = 25;
 const wAgent = 30;
 const wPerformer = 80;
 
-let performer = new THREE.Vector3(0, 2, 45);
-let agents = [];
-let points;
+let pickableObjects = [];
+let selected = null;
+let mouse = new THREE.Vector2();
+const raycaster = new THREE.Raycaster();
 
 const pedestrianMat = new THREE.MeshLambertMaterial({
     color: 0x00ff00
@@ -31,6 +30,8 @@ const onlookerMat = new THREE.MeshLambertMaterial({
 const performerMat = new THREE.MeshLambertMaterial({
     color: 0xff0000
 });
+
+const agentGeometry = new THREE.CylinderGeometry(RADIUS, 1, 4, 16);
 
 const { renderer, scene, camera } = createScene();
 init();
@@ -67,14 +68,12 @@ function init() {
     streetPlane.position.set(0, 0.05, 0);
     scene.add(streetPlane);
 
-    let agentGeometry, agent;
     for (let i = 0; i < COUNT; i++) {
-        let v = getVelocity();
-        let pos = getPostition();
-
-        let k = 1.5 + Math.random() * 1.5;
-        let maxSpeed = Math.random() * (MAXSPEED - 5) + 5;
-        let maxForce = 30 + Math.random() * 40;  
+        const v = getVelocity();
+        const pos = getPostition();
+        const k = 1.5 + Math.random() * 1.5;
+        const maxSpeed = Math.random() * (MAXSPEED - 5) + 5;
+        const maxForce = 30 + Math.random() * 40;
 
         agents.push(new Agent(
             i,
@@ -87,8 +86,7 @@ function init() {
 
         agents[i].setData("isWatching", false);
 
-        agentGeometry = new THREE.CylinderGeometry(RADIUS, 1, 4, 16);
-        agent = new THREE.Mesh(agentGeometry, pedestrianMat);
+        const agent = new THREE.Mesh(agentGeometry, pedestrianMat);
         agent.castShadow = true;
         agent.receiveShadow = true;
         agent.userData = {
@@ -99,13 +97,13 @@ function init() {
         pickableObjects.push(agent);
     }
 
-    agent = new THREE.Mesh(agentGeometry, performerMat);
+    const agent = new THREE.Mesh(agentGeometry, performerMat);
     agent.castShadow = true;
     agent.receiveShadow = true;
     agent.position.set(performer.x, performer.y, performer.z);
     scene.add(agent);
 
-    var p = new FastPoissonDiskSampling({
+    const p = new FastPoissonDiskSampling({
         shape: [100, 100],
         radius: 2 * RADIUS,
         tries: 20
@@ -126,8 +124,8 @@ function mouseDown(event) {
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
     selected = null;
-    var intersects = raycaster.intersectObjects(pickableObjects, false);
-    for (var i = 0; i < intersects.length; i++) {
+    const intersects = raycaster.intersectObjects(pickableObjects, false);
+    for (let i = 0; i < intersects.length; i++) {
         selected = intersects[i].object.userData.id;
     }
 }
@@ -151,7 +149,6 @@ function animate() {
         if (selected != null && member.id == selected && !member.getData("isWatching")) {
             member.setData("isWatching", true);
             member.target = generateViewingPosition(member);
-            console.log(points.length);
         }
 
         if (member.getData("isWatching") && member.position.z > 20) {
