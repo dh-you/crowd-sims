@@ -52,8 +52,8 @@ function getPostition() {
 }
 
 function getVelocity() {
-    let theta = Math.random() * Math.PI * 2;
-    let speed = Math.random() * MAXSPEED;
+    const theta = Math.random() * Math.PI * 2;
+    const speed = Math.random() * MAXSPEED;
 
     return [speed * Math.cos(theta), speed * Math.sin(theta)];
 }

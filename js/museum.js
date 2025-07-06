@@ -9,15 +9,20 @@ let walls = [];
 const COUNT = 150;
 const RADIUS = 1;
 const MAXSPEED = 2.5;
-const HORIZON = 25;
+const HORIZON = 1;
 const EPSILON = 0.01;
 
+let viewerCounts = {};
 let paintings = [];
-let points = [];
+let viewingPoints = [];
+let exitPoints = [];
+let inTransition = 0;
+const TRANSITIONCAP = 10;
 const wAgent = 30;
 const wPainting = 80;
 const MINCOMFORT = 11;
-const MAXCOMFORT = 21;
+const MIDCOMFORT = 21;
+const MAXCOMFORT = 31;
 
 const agentMat = new THREE.MeshLambertMaterial({
     color: 0x00ff00
@@ -32,9 +37,31 @@ function weightedScore(point, agent, painting) {
 }
 
 function generateViewingPosition(agent, painting) {
-    return points
+    return viewingPoints
         .sort((p1, p2) => weightedScore(p2, agent, painting) - weightedScore(p1, agent, painting))
         .pop();
+}
+
+function generateExitPosition(agent) {
+    return exitPoints
+        .sort((p1, p2) => p1.distanceTo(agent.position) - p2.distanceTo(agent.position))
+        .at(0);
+}
+
+function choosePainting(agent) {
+    let minViewers = COUNT;
+    let bestPainting;
+
+    paintings.forEach(function(painting) {
+        if (painting.mesh.id != agent.getData("painting")) {
+            if (viewerCounts[painting.mesh.id] < minViewers) {
+                minViewers = viewerCounts[painting.mesh.id];
+                bestPainting = painting.mesh;
+            }
+        }
+    });
+
+    return bestPainting;
 }
 
 function getVelocity() {
@@ -61,26 +88,22 @@ function init() {
     let min = 5;
     let max = 10;
     const paintingsData = [
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(-50 + EPSILON, 7.5, -40)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(-50 + EPSILON, 7.5, -20)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(-50 + EPSILON, 7.5, 0)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(-50 + EPSILON, 7.5, 20)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(-50 + EPSILON, 7.5, 40)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(50 - EPSILON, 7.5, -40)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(50 - EPSILON, 7.5, -20)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(50 - EPSILON, 7.5, 0)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(50 - EPSILON, 7.5, 20)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(50 - EPSILON, 7.5, 40)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(-40, 7.5, -50 + EPSILON)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(-20, 7.5, -50 + EPSILON)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(0, 7.5, -50 + EPSILON)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(20, 7.5, -50 + EPSILON)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(40, 7.5, -50 + EPSILON)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(-40, 7.5, 50 - EPSILON)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(-20, 7.5, 50 - EPSILON)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(0, 7.5, 50 - EPSILON)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(20, 7.5, 50 - EPSILON)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(40, 7.5, 50 - EPSILON)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(-50 + EPSILON, 7.5, -33)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(-50 + EPSILON, 7.5, -11)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(-50 + EPSILON, 7.5, 11)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(-50 + EPSILON, 7.5, 33)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(50 - EPSILON, 7.5, -33)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(50 - EPSILON, 7.5, -11)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(50 - EPSILON, 7.5, 11)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(50 - EPSILON, 7.5, 33)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(-33, 7.5, -50 + EPSILON)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(-11, 7.5, -50 + EPSILON)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(11, 7.5, -50 + EPSILON)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(33, 7.5, -50 + EPSILON)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(-33, 7.5, 50 - EPSILON)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(-11, 7.5, 50 - EPSILON)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(11, 7.5, 50 - EPSILON)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(33, 7.5, 50 - EPSILON)],
     ]
 
     paintingsData.forEach(([width, height, vertical, position]) => {
@@ -90,6 +113,7 @@ function init() {
         });
         scene.add(painting.mesh);
         paintings.push(painting);
+        viewerCounts[painting.mesh.id] = 0;
     });
 
     const p = new FastPoissonDiskSampling({
@@ -98,11 +122,19 @@ function init() {
         tries: 20
     }); 
 
-    points = p.fill();
-    points = points.map(([x, z]) => new THREE.Vector3(x - 50, 2, z - 50));
-    points = points.filter(p => {
+    let points = p.fill();
+
+    viewingPoints = points.map(([x, z]) => new THREE.Vector3(x - 50, 2, z - 50));
+    viewingPoints = viewingPoints.filter(p => {
         if (paintings.some(painting => painting.mesh.position.distanceTo(p) < MINCOMFORT)) return false;
-        if (!paintings.some(painting => painting.mesh.position.distanceTo(p) < MAXCOMFORT)) return false;
+        if (!paintings.some(painting => painting.mesh.position.distanceTo(p) < MIDCOMFORT)) return false;
+        return true;
+    });
+
+    exitPoints = points.map(([x, z]) => new THREE.Vector3(x - 50, 2, z - 50));
+    exitPoints = exitPoints.filter(p => {
+        if (paintings.some(painting => painting.mesh.position.distanceTo(p) < MIDCOMFORT)) return false;
+        if (!paintings.some(painting => painting.mesh.position.distanceTo(p) > MAXCOMFORT)) return false;
         return true;
     });
 
@@ -111,7 +143,7 @@ function init() {
 
         const k = 1.5 + Math.random() * 1.5;
         const maxSpeed = Math.random() * (MAXSPEED - 5) + 5;
-        const maxForce = 10 + Math.random() * 20;
+        const maxForce = 30 + Math.random() * 40;
 
         agents.push(new Agent(
             i,
@@ -127,11 +159,13 @@ function init() {
             agents[i],
             painting.mesh
         );
-        agents[i].position = pos;
         agents[i].target = pos;
+        agents[i].position = pos.clone().add(new THREE.Vector3(EPSILON, 0, EPSILON));
         agents[i].setData("viewingPosition", pos);
-        agents[i].setData("viewing", true);
-        agents[i].setData("time", 30 + Math.random() * 180);
+        agents[i].setData("painting", painting.mesh.id);
+        agents[i].setData("state", "VIEWING");
+        agents[i].setData("timer", 30 + Math.random() * 300);
+        viewerCounts[painting.mesh.id]++;
     }
 
     agents.forEach(function(member) {
@@ -162,47 +196,45 @@ function animate(timestamp = 0) {
 
     timer += delta;
 
-    if (timer >= 60) {
-        timer = 0;
-
-        const viewingAgents = agents.filter(a => a.getData("viewing"));
-        for (let i = viewingAgents.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [viewingAgents[i], viewingAgents[j]] = [viewingAgents[j], viewingAgents[i]];
-        }
-
-        for (let i = 0; i < 10; i++) {
-            const agent = viewingAgents[i];
-            
-            points.push(agent.getData("viewingPosition"));
-            agent.target = new THREE.Vector3(0, 2, 0);
-            agent.setData("goingCenter", true);
-            agent.setData("viewing", false);
-        }
-    }
-
-    agents.forEach(agent => {
-        if (agent.getData("goingCenter")) {
-            const dist = agent.position.distanceTo(new THREE.Vector3(0, 2, 0));
-            if (dist < MAXCOMFORT) {
-                const painting = paintings[Math.floor(Math.random() * paintings.length)];
-                const pos = generateViewingPosition(agent, painting.mesh);
-
-                agent.target = pos;
-                agent.setData("viewingPosition", pos);
-                agent.setData("viewing", false);
-                agent.setData("goingCenter", false);
-            }
-        }
-    });
-
     agents.forEach(function(member) {
-        if (!member.getData("viewing") && !member.getData("goingCenter")) {
-            const dist = member.position.distanceTo(member.getData("viewingPosition"));
-            if (dist < RADIUS) {
-                member.setData("viewing", true);
-            }
-        }
+        switch (member.getData("state")) {
+            case "VIEWING":
+                member.horizon = 1;
+                member.setData("timer", member.getData("timer") - delta);
+                member.target = member.getData("viewingPosition");
+                if (member.getData("timer") <= 0 && inTransition < TRANSITIONCAP) {
+                    inTransition++;
+                    member.target = generateExitPosition(member);
+                    member.setData("state", "EXITING");
+                    viewerCounts[member.getData("painting")]--;
+                } else if (member.getData("timer") <= 0 && inTransition >= TRANSITIONCAP) {
+                    console.log(TRANSITIONCAP);
+                    member.setData("timer", 10 + Math.random() * 100);
+                }
+                break;
+            
+            case "EXITING":
+                member.horizon = 15;
+                if (member.position.distanceTo(member.target) < 5) {
+                    const painting = choosePainting(member);
+                    viewingPoints.push(member.getData("viewingPosition"));
+                    member.setData("viewingPosition", generateViewingPosition(member, painting));
+                    member.target = member.getData("viewingPosition").clone();
+                    member.setData("painting", painting.id);
+                    member.setData("state", "WALKING");
+                    viewerCounts[member.getData("painting")]++;
+                }
+                break;
+
+            case "WALKING":
+                member.horizon = 25;
+                if (member.position.distanceTo(member.getData("viewingPosition")) < 5) {
+                    inTransition--;
+                    member.setData("timer", 30 + Math.random() * 300);
+                    member.setData("state", "VIEWING");
+                }
+                break;
+        } 
     });
 
     agents.forEach(function(member) {
@@ -224,4 +256,4 @@ function animate(timestamp = 0) {
 };
 
 
-animate();
+animate()
