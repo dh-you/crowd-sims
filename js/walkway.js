@@ -1,16 +1,20 @@
-import { createScene } from './environment.js';
+import { LENGTH, createScene } from './environment.js';
 import { Agent } from './agent.js';
 import { Wall } from './wall.js';
+import { updateAgents } from './physics.js'
+import * as UTILS from './utils.js'
 import * as THREE from 'three';
-import * as PHYSICS from 'physics';
 
 let agents = [];
 let walls = [];
-const COUNT = 75;
-const RADIUS = 1;
-const MAXSPEED = 7.5;
-const HORIZON = 50;
-const LENGTH = 100;
+
+const CONFIG = {
+    COUNT: 100,
+    RADIUS: 1,
+    MAXSPEED: 5,
+    MAXFORCE: 20,
+    HORIZON: 30,
+}
 
 const agentMat = new THREE.MeshLambertMaterial({
     color: 0x00ff00
@@ -18,18 +22,6 @@ const agentMat = new THREE.MeshLambertMaterial({
 
 const { renderer, scene, camera } = createScene();
 init();
-render();
-
-function getPostition() {
-    return [Math.random() * 20 - 50, Math.random() * 100 - 50];
-}
-
-function getVelocity() {
-    const theta = Math.random() * Math.PI * 2;
-    const speed = Math.random() * MAXSPEED;
-
-    return [speed * Math.cos(theta), speed * Math.sin(theta)];
-}
 
 function init() {
     const wallData = [
@@ -62,13 +54,12 @@ function init() {
     street2.position.set(0, 0.05, -12.5);
     scene.add(street2);
 
-    for (let i = 0; i < COUNT; i++) {
-        const v = getVelocity();
-        const pos = getPostition();
+    for (let i = 0; i < CONFIG.COUNT; i++) {
+        const v = UTILS.getVelocity(CONFIG.MAXSPEED);
+        const pos = UTILS.getPosition(-50, -30, -50, 50);
 
         const k = 1.5 + Math.random() * 1.5;
-        const maxSpeed = Math.random() * (MAXSPEED - 5) + 5;
-        const maxForce = 30 + Math.random() * 40;
+        const maxSpeed = Math.random() * (CONFIG.MAXSPEED - 5) + 5;
 
         agents.push(new Agent(
             i,
@@ -76,7 +67,7 @@ function init() {
             v[0], 0, v[1],
             0, 0, 0,
             0, 2, pos[1],            
-            RADIUS, maxSpeed, maxForce, HORIZON, k
+            CONFIG.RADIUS, maxSpeed, CONFIG.MAXFORCE, CONFIG.HORIZON, k
         ));
     }
 
@@ -93,56 +84,41 @@ function init() {
     });
 }
 
-function render() {
-    renderer.render(scene, camera);
-}
-
 function animate() {
     requestAnimationFrame(animate);
 
     agents.forEach(function(member) {
-        if (member.position.z > LENGTH / 2 - RADIUS) {
-            member.position.z = LENGTH / 2 - RADIUS;
-        } else if (member.position.z < -LENGTH / 2 + RADIUS) {
-            member.position.z = -LENGTH / 2 + RADIUS;
+        // wrap around
+        if (member.position.z > LENGTH / 2 - CONFIG.RADIUS) {
+            member.position.z = LENGTH / 2 - CONFIG.RADIUS;
+        } else if (member.position.z < -LENGTH / 2 + CONFIG.RADIUS) {
+            member.position.z = -LENGTH / 2 + CONFIG.RADIUS;
         }
 
-        if (member.position.z < 0) {
-            member.target.z = -12.5;
-        } else {
-            member.target.z = 12.5;
-        }
-
+        // choose left or right walkway
+        member.target.z = member.position.z < 0 ? -12.5 : 12.5;
         member.target.x = -32.5;
-        member.maxSpeed = MAXSPEED;
 
+        // boost speed if in walkway
         if (member.position.x >= -30 && member.position.x <= 30) {
             if (member.position.z < 0 && member.position.z > -15 && member.position.z < -10) {
-                member.maxSpeed = MAXSPEED * 1.5;
+                member.maxSpeed = CONFIG.MAXSPEED * 1.5;
             } else if (member.position.z > 10 && member.position.z < 15) {
-                    member.maxSpeed = MAXSPEED * 1.5;
+                member.maxSpeed = CONFIG.MAXSPEED * 1.5;
             }
         }
 
-        if (Math.abs(member.position.x + 32.5) <= 7.5 && member.position.z > -15 && member.position.z < -10) {
-            member.target.x = 200;
-        } else if (Math.abs(member.position.x + 32.5) <= 7.5 && member.position.z > 10 && member.position.z < 15) {
-            member.target.x = 200;
-        }
-
-        if (member.position.x >= -30 && member.position.z > -15 && member.position.z < -10) {
-            member.target.x = 200;
-        } else if (member.position.x >= -30 && member.position.z > 10 && member.position.z < 15) {
-            member.target.x = 200;
-        }
-
-        if (member.position.x >= 25) {
+        // funnel agents through walkway
+        const nearEntry = Math.abs(member.position.x + 32.5) <= 7.5;
+        const left = member.position.z > 10 && member.position.z < 15;
+        const right = member.position.z > -15 && member.position.z < -10;
+        if ((nearEntry && (left || right)) || (member.position.x >= -30 && (left || right)) ||  member.position.x >= 25) {
             member.target.x = 200;
         }
     });
 
     agents.forEach(function(member) {
-        PHYSICS.update(member, agents);
+        updateAgents(member, agents);
     });
 
     agents.forEach(function(agent) {

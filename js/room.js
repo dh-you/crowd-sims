@@ -1,15 +1,20 @@
 import { createScene } from './environment.js';
 import { Agent } from './agent.js';
 import { Wall } from './wall.js';
+import { updateAgents } from './physics.js'
+import * as UTILS from './utils.js'
 import * as THREE from 'three';
-import * as PHYSICS from 'physics';
 
 let agents = [];
 let walls = [];
-const COUNT = 150;
-const RADIUS = 1;
-const MAXSPEED = 10;
-const HORIZON = 50;
+
+const CONFIG = {
+    COUNT: 150,
+    RADIUS: 1,
+    MAXSPEED: 10,
+    MAXFORCE: 50,
+    HORIZON: 50
+}
 
 const agentMat = new THREE.MeshLambertMaterial({
     color: 0x00ff00
@@ -18,20 +23,6 @@ const agentMat = new THREE.MeshLambertMaterial({
 const { renderer, scene, camera } = createScene();
 init();
 render();
-
-function getPostition() {
-    const x = Math.random() * 90 - 45;
-    const z = Math.random() * 40 - 45;
-
-    return [x, z];
-}
-
-function getVelocity() {
-    const theta = Math.random() * Math.PI * 2;
-    const speed = Math.random() * MAXSPEED;
-
-    return [speed * Math.cos(theta), speed * Math.sin(theta)];
-}
 
 function init() {
     const wallsData = [
@@ -50,13 +41,12 @@ function init() {
         walls.push(wall);
     });
 
-    for (let i = 0; i < COUNT; i++) {
-        const v = getVelocity();
-        const pos = getPostition();
+    for (let i = 0; i < CONFIG.COUNT; i++) {
+        const v = UTILS.getVelocity(CONFIG.MAXSPEED);
+        const pos = UTILS.getPosition(-45, 45, -45, -5);
 
         const k = 1.5 + Math.random() * 1.5;
-        const maxSpeed = Math.random() * (MAXSPEED - 5) + 5;
-        const maxForce = 30 + Math.random() * 40;
+        const maxSpeed = Math.random() * (CONFIG.MAXSPEED - 5) + 5;
 
         agents.push(new Agent(
             i,
@@ -64,7 +54,7 @@ function init() {
             v[0], 0, v[1], 
             0, 0, 0,
             0, 2, 0,
-            RADIUS, maxSpeed, maxForce, HORIZON, k                   
+            CONFIG.RADIUS, maxSpeed, CONFIG.MAXFORCE, CONFIG.HORIZON, k                   
         ));
     }
 
@@ -89,6 +79,7 @@ function animate() {
     requestAnimationFrame(animate);
 
     agents.forEach(function(member) {
+        // navigate agents to entry
         if (member.position.z < 25) {            
             if (member.position.x > 10) {
                 member.target.x = -10;
@@ -100,13 +91,14 @@ function animate() {
             member.target.z = 27.5;
         }
 
+        // navigate agents to exit
         if (member.position.z >= 25) {
             member.target.z = 200;
         }
     });
 
     agents.forEach(function(member) {
-        PHYSICS.update(member, agents);
+        updateAgents(member, agents);
     });
 
     agents.forEach(function(agent) {

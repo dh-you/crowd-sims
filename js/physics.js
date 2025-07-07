@@ -1,7 +1,7 @@
+import * as UTILS from './utils.js'
 import * as THREE from 'three';
 
 const TIMESTEP = 0.005;
-const EPSILON = 0.001;
 const sideStepStrength = 0.5;
 
 function timeToCollision(agent, neighbor) {
@@ -45,7 +45,7 @@ export function applyForce(agent, f) {
     agent.position.z += agent.velocity.z * TIMESTEP;
 }
 
-export function update(agent, agents) {
+export function updateAgents(agent, agents) {
     agent.goal.x = agent.target.x - agent.position.x;
     agent.goal.z = agent.target.z - agent.position.z;
 
@@ -71,6 +71,7 @@ export function update(agent, agents) {
             const leftDot = left.dot(neighbor.velocity);
             const rightDot = right.dot(neighbor.velocity);
 
+            // side step in opposite direction of other neighbor
             let sidestep;
             if (leftDot < 0 && rightDot < 0) {
                 sidestep = leftDot < rightDot ? left : right;
@@ -81,11 +82,11 @@ export function update(agent, agents) {
             }
 
             if (t >= 0 && t <= agent.horizon) {
-                fxAvoid += dir.x * (agent.horizon - t) / (t + EPSILON);
-                fzAvoid += dir.z * (agent.horizon - t) / (t + EPSILON);
+                fxAvoid += dir.x * (agent.horizon - t) / (t + UTILS.EPSILON);
+                fzAvoid += dir.z * (agent.horizon - t) / (t + UTILS.EPSILON);
 
-                fxAvoid += sideStepStrength * sidestep.x * (agent.horizon - t) / (t + EPSILON);
-                fzAvoid += sideStepStrength * sidestep.z * (agent.horizon - t) / (t + EPSILON);
+                fxAvoid += sideStepStrength * sidestep.x * (agent.horizon - t) / (t + UTILS.EPSILON);
+                fzAvoid += sideStepStrength * sidestep.z * (agent.horizon - t) / (t + UTILS.EPSILON);
             }
         }
     });

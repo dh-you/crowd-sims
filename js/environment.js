@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
-const LENGTH = 100;
+export const LENGTH = 100;
 
 let renderer, scene, camera;
 const world = {

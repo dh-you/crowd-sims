@@ -1,21 +1,27 @@
 import { createScene } from './environment.js';
-import { Wall } from './wall.js';
 import { Agent } from './agent.js';
+import { Wall } from './wall.js';
+import { updateAgents } from './physics.js'
+import * as UTILS from './utils.js'
 import * as THREE from 'three';
-import * as PHYSICS from 'physics';
 
 let agents = [];
 let walls = [];
-const COUNT = 20;
-const RADIUS = 1;
-const MAXSPEED = 5;
-const HORIZON = 100;
+
+const CONFIG = {
+    COUNT: 20,
+    RADIUS: 1,
+    MAXSPEED: 5,
+    MAXFORCE: 30,
+    HORIZON: 100
+}
 
 const gaps = [-33, -11, 11, 33];  
 let wallTargets = [];
 let agentsTargets = [];
 let assigned = [];
 let floor;
+let animationDone = false;
 
 const group1Mat = new THREE.MeshLambertMaterial({
     color: 0x00ff00
@@ -24,22 +30,8 @@ const group2Mat = new THREE.MeshLambertMaterial({
     color: 0xff0000
 });
 
-let animationDone = false;
-
 const { renderer, scene, camera } = createScene();
 init();
-render();
-
-function getPostition(min, max) {
-    return Math.random() * (max - min) + min;
-}
-
-function getVelocity() {
-    let theta = Math.random() * Math.PI * 2;
-    let speed = Math.random() * MAXSPEED;
-
-    return [speed * Math.cos(theta), speed * Math.sin(theta)];
-}
 
 function nearestDoor(z) {
     return gaps.sort((a, b) => Math.abs(z - a) - Math.abs(z - b))[0];
@@ -76,20 +68,20 @@ function init() {
     floor = plane9;
     scene.add(plane9);
 
-    for (let i = 0; i < COUNT; i++) {
-        const v = getVelocity();
+    for (let i = 0; i < CONFIG.COUNT; i++) {
+        const v = UTILS.getVelocity(CONFIG.MAXSPEED);
+        const pos = UTILS.getPosition(40, 47.5, -39, 39);
 
         const k = 1.5 + Math.random() * 1.5;
-        const maxSpeed = Math.random() * (MAXSPEED - 5) + 5;
-        const maxForce = 30 + Math.random() * 40;  
+        const maxSpeed = Math.random() * (CONFIG.MAXSPEED - 5) + 5;
 
         agents.push(new Agent(
             i,
-            getPostition(40, 47.5), 2, getPostition(-39, 39),
+            pos[0], 2, pos[1],
             v[0], 0, v[1],
             0, 0, 0,
             0, 2, 0,
-            RADIUS, maxSpeed, maxForce, HORIZON, k
+            CONFIG.RADIUS, maxSpeed, CONFIG.MAXFORCE, CONFIG.HORIZON, k
         ));
         agents[i].setData("group", 1);
         agentsTargets.push(new THREE.Vector3(agents[i].position.x, 2, agents[i].position.z));
@@ -97,25 +89,26 @@ function init() {
         assigned.push(false);
     }
 
-    for (let i = 0; i < COUNT; i++) {
-        const v = getVelocity();
+    for (let i = 0; i < CONFIG.COUNT; i++) {
+        const v = UTILS.getVelocity(CONFIG.MAXSPEED);
+        const pos = UTILS.getPosition(0, 23, -39, 39);
 
         const k = 1.5 + Math.random() * 1.5;
-        const maxSpeed = Math.random() * (MAXSPEED - 5) + 5;
+        const maxSpeed = Math.random() * (CONFIG.MAXSPEED - 5) + 5;
         const maxForce = 30 + Math.random() * 40;  
 
         agents.push(new Agent(
-            i + COUNT,
-            getPostition(0, 23), 2, getPostition(-39, 39),
+            i + CONFIG.COUNT,
+            pos[0], 2, pos[1],
             v[0], 0, v[1],
             0, 0, 0,
             0, 2, 0,
-            RADIUS, maxSpeed, maxForce, HORIZON, k
+            CONFIG.RADIUS, maxSpeed, maxForce, CONFIG.HORIZON, k
         ));
-        agents[i + COUNT].setData("group", 2);
+        agents[i + CONFIG.COUNT].setData("group", 2);
     }
 
-    for (let i = 0; i < COUNT; i++) {
+    for (let i = 0; i < CONFIG.COUNT; i++) {
         const agentGeometry1 = new THREE.CylinderGeometry(agents[i].radius, 1, 4, 16);
         const agent1 = new THREE.Mesh(agentGeometry1, group1Mat);
         agent1.castShadow = true;
@@ -123,25 +116,23 @@ function init() {
         scene.add(agent1);
         agents[i].setData("agent", agent1);
 
-        const agentGeometry2 = new THREE.CylinderGeometry(agents[i + COUNT].radius, 1, 4, 16);
+        const agentGeometry2 = new THREE.CylinderGeometry(agents[i + CONFIG.COUNT].radius, 1, 4, 16);
         const agent2 = new THREE.Mesh(agentGeometry2, group2Mat);
         agent2.castShadow = true;
         agent2.receiveShadow = true;
         scene.add(agent2);
-        agents[i + COUNT].setData("agent", agent2);
+        agents[i + CONFIG.COUNT].setData("agent", agent2);
     }
-}
-
-function render() {
-    renderer.render(scene, camera);
 }
 
 function animate() {
     requestAnimationFrame(animate);
     
+    // subway arriving at station animation
     if (!animationDone) {
         let done = true;
 
+        // smoothly lerp walls 
         for (let i = 0; i < walls.length; i++) {
             walls[i].mesh.position.lerp(wallTargets[i], 0.005);
 
@@ -152,12 +143,13 @@ function animate() {
             }
         }
 
+        // smoothly lerp floor
         floor.position.lerp(new THREE.Vector3(42.5, 0.05, 0), 0.005);
-
         if (floor.position.distanceTo(new THREE.Vector3(42.5, 0.05, 0)) > 0.1) {
             done = false;
         }
 
+        // smoothly lerp agents
         for (let i = 0; i < agents.length; i++) {
             if (agents[i].getData("group") == 1) {
                 agents[i].position.lerp(agentsTargets[i], 0.005);
@@ -179,40 +171,38 @@ function animate() {
     }
 
     agents.forEach(function(member) {
-        if (member.getData("group") == 1) {
-            if (member.position.x > 35 + RADIUS && !assigned[member.id]) {
-                member.target.z = nearestDoor(member.position.z);
-                member.target.x = 35 - 0.5;
-            } else if (!assigned[member.id]) {
-                member.target.x = getPostition(0, 23);
-                member.target.z = getPostition(-39, 39);
-                assigned[member.id] = true;
-            }
-        } else {
-           if (member.position.x < 35 - RADIUS && !assigned[member.id]) {
-                member.target.z = nearestDoor(member.position.z);
-                member.target.x = 35 + 0.5;
-            } else if (!assigned[member.id]) {
-                member.target.x = getPostition(40, 47.5);
-                member.target.z = getPostition(-39, 39);
-                assigned[member.id] = true;
-            } 
+        // navigate agents to subway doors and outside
+        switch (member.getData("group")) {
+            case 1:
+                if (member.position.x > 35 + CONFIG.RADIUS && !assigned[member.id]) {
+                    member.target.z = nearestDoor(member.position.z);
+                    member.target.x = 35 - 0.5;
+                } else if (!assigned[member.id]) {
+                    [member.target.x, member.target.z] = UTILS.getPosition(0, 23, -39, 39);
+                    assigned[member.id] = true;
+                }
+                break;
+                
+            case 2:
+                if (member.position.x < 35 - CONFIG.RADIUS && !assigned[member.id]) {
+                    member.target.z = nearestDoor(member.position.z);
+                    member.target.x = 35 + 0.5;
+                } else if (!assigned[member.id]) {
+                    [member.target.x, member.target.z] = UTILS.getPosition(40, 47.5, -39, 39);
+                    assigned[member.id] = true;
+                } 
+                break;
         }
     });
 
     agents.forEach(function(member) {
-        PHYSICS.update(member, agents);
+        updateAgents(member, agents);
     });
 
     agents.forEach(function(agent) {
         walls.forEach(function(wall) {
             wall.collisionResolve(agent);
         });
-    });
-
-    agents.forEach(function(member) {
-        member.getData("agent").position.copy(member.position);
-        member.getData("agent").material = member.getData("group") == 1 ? group1Mat : group2Mat;
     });
 
     agents.forEach(function(member) {
