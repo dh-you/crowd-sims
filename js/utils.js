@@ -1,4 +1,4 @@
-export const EPSILON = 0.001;
+export const EPSILON = 0.005;
 
 export function getVelocity(maxSpeed) {
     const theta = Math.random() * Math.PI * 2;
