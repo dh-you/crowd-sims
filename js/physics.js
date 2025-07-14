@@ -2,7 +2,7 @@ import * as UTILS from './utils.js'
 import * as THREE from 'three';
 
 const TIMESTEP = 0.005;
-const sideStepStrength = 0.5;
+const SIDESTEP_STRENGTH = 0.5;
 
 function timeToCollision(agent, neighbor) {
     const r = agent.radius + neighbor.radius;
@@ -59,34 +59,37 @@ export function updateAgents(agent, agents) {
         if (neighbor.id != agent.id) {
             const t = timeToCollision(agent, neighbor);
 
+            // predicted direction vector in future
             const dir = new THREE.Vector3(
                 (agent.position.x + agent.velocity.x * t) - (neighbor.position.x + neighbor.velocity.x * t),
                 0,
                 (agent.position.z + agent.velocity.z * t) - (neighbor.position.z + neighbor.velocity.z * t)
             ).normalize();
 
+            // global left and right directions, 90 deg rotation from up vector
             const left = dir.clone().applyAxisAngle(new THREE.Vector3(0,1,0), Math.PI / 2);
             const right = dir.clone().applyAxisAngle(new THREE.Vector3(0,1,0), -Math.PI / 2);
             
+            // is neighbor going left or right
             const leftDot = left.dot(neighbor.velocity);
             const rightDot = right.dot(neighbor.velocity);
 
             // side step in opposite direction of other neighbor
             let sidestep;
-            if (leftDot < 0 && rightDot < 0) {
+            if (leftDot < 0 && rightDot < 0) { // neighbor is neither going left or right
                 sidestep = leftDot < rightDot ? left : right;
-            } else if (leftDot > 0 && rightDot > 0) {
-                sidestep = leftDot < rightDot ? right : left;
-            } else {
+            } else { // neighbor is aligned with either left or right
                 sidestep = leftDot < 0 ? left : right;
             }
 
             if (t >= 0 && t <= agent.horizon) {
-                fxAvoid += dir.x * (agent.horizon - t) / (t + UTILS.EPSILON);
-                fzAvoid += dir.z * (agent.horizon - t) / (t + UTILS.EPSILON);
+                let avoidanceWeight = (agent.horizon - t) / (t + UTILS.EPSILON);
 
-                fxAvoid += sideStepStrength * sidestep.x * (agent.horizon - t) / (t + UTILS.EPSILON);
-                fzAvoid += sideStepStrength * sidestep.z * (agent.horizon - t) / (t + UTILS.EPSILON);
+                fxAvoid += dir.x * avoidanceWeight;
+                fzAvoid += dir.z * avoidanceWeight;
+
+                fxAvoid += SIDESTEP_STRENGTH * sidestep.x * avoidanceWeight;
+                fzAvoid += SIDESTEP_STRENGTH * sidestep.z * avoidanceWeight;
             }
         }
     });

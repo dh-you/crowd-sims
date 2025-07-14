@@ -11,13 +11,16 @@ let walls = [];
 const CONFIG = {
     COUNT: 102,
     RADIUS: 1,
-    MAXSPEED: 10,
+    MAXSPEED: 5,
     MAXFORCE: 50,
-    HORIZON: 50
+    HORIZON: 50,
 }
 
-let rows = [];
+let leftRows = [];
+let rightRows = [];
+let orders = [];
 let aisle = [];
+let rowNum;
 
 const agentMat = new THREE.MeshLambertMaterial({
     color: 0x00ff00
@@ -26,6 +29,16 @@ const agentMat = new THREE.MeshLambertMaterial({
 const { renderer, scene, camera } = createScene();
 init();
 render();
+
+function shuffle(rowNum, left) {
+    const row = left ? leftRows[rowNum] : rightRows[rowNum];
+    for (const agent of row) agent.target.x += left ? -4 : 4;
+
+    const nextAgent = row.pop();
+    if (nextAgent) {
+        aisle[rowNum] = nextAgent;
+    }
+}
 
 function init() {
     const wallsData = [
@@ -65,7 +78,6 @@ function init() {
             const v = UTILS.getVelocity(CONFIG.MAXSPEED);
 
             const k = 1.5 + Math.random() * 1.5;
-            const maxSpeed = Math.random() * (CONFIG.MAXSPEED - 5) + 5;
 
             agents.push(new Agent(
                 i,
@@ -73,13 +85,17 @@ function init() {
                 v[0], 0, v[1], 
                 0, 0, 0,
                 j, 2, i,
-                CONFIG.RADIUS, maxSpeed, CONFIG.MAXFORCE, CONFIG.HORIZON, k                   
+                CONFIG.RADIUS, CONFIG.MAXSPEED, CONFIG.MAXFORCE, CONFIG.HORIZON, k                   
             ));
-            row.push([j, i,]);
+            row.push(agents[agents.length-1]);
         }
-        rows.push(row);
-        aisle.push([0, i, false]);
+        leftRows.push(row.splice(0, 3));
+        rightRows.push(row.splice(0, 3));
+        // random order for left row and right row exiting
+        orders.push([true, true, true, false, false, false].sort(() => Math.random() - 0.5));
+        aisle.push(null);
     }
+    rowNum = aisle.length-1;
 
     agents.forEach(function(member) {
         const agentGeometry = new THREE.CylinderGeometry(member.radius, 1, 4, 16);
@@ -98,13 +114,47 @@ function render() {
     renderer.render(scene, camera);
 }
 
+for (let i = 0; i < aisle.length; i++) {
+    const left = orders[i].pop();
+    shuffle(i, left);
+}
+
 function animate() {
     requestAnimationFrame(animate);
 
-    agents.forEach(function(member) {
-        updateAgents(member, agents);
-    });
+    if (rowNum >= 0) {
+        let agentInAisle = aisle[rowNum];
+
+        if (!agentInAisle && orders[rowNum].length > 0) {
+            // choose random agent to let out into the aisle
+            const left = orders[rowNum].pop();
+            shuffle(rowNum, left);
+        }
+
+        agentInAisle = aisle[rowNum];
+        if (agentInAisle) {
+            const reachedAisle = Math.abs(agentInAisle.position.x) < 2;
+
+            // do not let next agent move until agent in the aisle has left 
+            if (!reachedAisle) {
+                agentInAisle.target.x = 0;
+            } else {
+                agentInAisle.target.z = 45;
+                agentInAisle.setData("state", "EXITING");
+                aisle[rowNum] = null;
+            }
+        } else if (orders[rowNum].length === 0) {
+            rowNum--; // row has finished exiting their seats
+        }
+    }
     
+    agents.forEach(function(member) {
+        // navigate out of plane
+        if (member.getData("state") == "EXITING" && member.position.z >= 44) {
+            member.target.x = 200;
+        }
+    });
+
     agents.forEach(function(member) {
         updateAgents(member, agents);
     });
