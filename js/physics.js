@@ -1,7 +1,6 @@
 import * as UTILS from './utils.js'
 import * as THREE from 'three';
 
-const TIMESTEP = 0.005;
 const SIDESTEP_STRENGTH = 0.5;
 
 function timeToCollision(agent, neighbor) {
@@ -25,15 +24,15 @@ function timeToCollision(agent, neighbor) {
     return tau;
 }
 
-export function applyForce(agent, f) {
+export function applyForce(agent, f, timestep) {
     const force = f.length();
     if (force > agent.maxForce) {
         f.x = agent.maxForce * f.x / force;
         f.z = agent.maxForce * f.z / force;
     }
 
-    agent.velocity.x += f.x * TIMESTEP;
-    agent.velocity.z += f.z * TIMESTEP;
+    agent.velocity.x += f.x * timestep;
+    agent.velocity.z += f.z * timestep;
 
     const speed = agent.velocity.length();
     if (speed > agent.maxSpeed) {
@@ -41,11 +40,11 @@ export function applyForce(agent, f) {
         agent.velocity.z = agent.maxSpeed * agent.velocity.z / speed;
     }
 
-    agent.position.x += agent.velocity.x * TIMESTEP;
-    agent.position.z += agent.velocity.z * TIMESTEP;
+    agent.position.x += agent.velocity.x * timestep;
+    agent.position.z += agent.velocity.z * timestep;
 }
 
-export function updateAgents(agent, agents) {
+export function updateAgents(agent, agents, timestep) {
     agent.goal.x = agent.target.x - agent.position.x;
     agent.goal.z = agent.target.z - agent.position.z;
 
@@ -97,5 +96,5 @@ export function updateAgents(agent, agents) {
     const fx = fxGoal + fxAvoid;
     const fz = fzGoal + fzAvoid;
 
-    applyForce(agent, new THREE.Vector3(fx, 0, fz));
+    applyForce(agent, new THREE.Vector3(fx, 0, fz), timestep);
 }

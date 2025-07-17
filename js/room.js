@@ -7,6 +7,7 @@ import * as THREE from 'three';
 
 let agents = [];
 let walls = [];
+let timestep;
 
 const CONFIG = {
     COUNT: 150,
@@ -97,10 +98,12 @@ function animate() {
         }
     });
 
+    timestep = document.getElementById("timestep").value;
+    document.getElementById("timestepValue").innerHTML = timestep;
     agents.forEach(function(member) {
-        updateAgents(member, agents);
+        updateAgents(member, agents, timestep);
     });
-
+    
     agents.forEach(function(agent) {
         walls.forEach(function(wall) {
             wall.collisionResolve(agent);
