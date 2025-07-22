@@ -10,11 +10,14 @@ let walls = [];
 let timestep;
 
 const CONFIG = {
-    COUNT: 100,
+    COUNT: 75,
     RADIUS: 1,
     MAXSPEED: 5,
-    MAXFORCE: 20,
-    HORIZON: 30,
+    MAXFORCE: 30,
+    HORIZON: 5,
+    K: 2,
+    AVOID: 5,
+    SIDESTEP: 5,
 }
 
 const agentMat = new THREE.MeshLambertMaterial({
@@ -56,19 +59,17 @@ function init() {
     scene.add(street2);
 
     for (let i = 0; i < CONFIG.COUNT; i++) {
-        const v = UTILS.getVelocity(CONFIG.MAXSPEED);
         const pos = UTILS.getPosition(-50, -30, -50, 50);
-
-        const k = 1.5 + Math.random() * 1.5;
         const maxSpeed = Math.random() * (CONFIG.MAXSPEED - 5) + 5;
 
         agents.push(new Agent(
             i,
             pos[0], 2, pos[1],            
-            v[0], 0, v[1],
+            0, 0, 0,
             0, 0, 0,
             0, 2, pos[1],            
-            CONFIG.RADIUS, maxSpeed, CONFIG.MAXFORCE, CONFIG.HORIZON, k
+            CONFIG.RADIUS, maxSpeed, CONFIG.MAXFORCE, CONFIG.HORIZON,
+            CONFIG.K, CONFIG.AVOID, CONFIG.SIDESTEP
         ));
     }
 

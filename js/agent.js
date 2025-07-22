@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 export class Agent {
-    constructor(id, x, y, z, vx, vy, vz, gx, gy, gz, tx, ty, tz, radius, maxSpeed, maxForce, horizon, k) {
+    constructor(id, x, y, z, vx, vy, vz, gx, gy, gz, tx, ty, tz, radius, maxSpeed, maxForce, horizon, k, avoid, sidestep) {
         this.id = id;
         this.position = new THREE.Vector3(x, y, z);
         this.velocity = new THREE.Vector3(vx, vy, vz);
@@ -12,6 +12,8 @@ export class Agent {
         this.maxForce = maxForce;
         this.horizon = horizon;
         this.k = k;
+        this.avoid = avoid;
+        this.sidestep = sidestep;
         this.userData = {};
         this.sphere = new THREE.Sphere(new THREE.Vector3(), radius);
     }

@@ -14,7 +14,10 @@ const CONFIG = {
     RADIUS: 1,
     MAXSPEED: 5,
     MAXFORCE: 30,
-    HORIZON: 100
+    HORIZON: 5,
+    K: 2,
+    AVOID: 1,
+    SIDESTEP: 5,
 }
 
 const gaps = [-33, -11, 11, 33];  
@@ -70,19 +73,17 @@ function init() {
     scene.add(plane9);
 
     for (let i = 0; i < CONFIG.COUNT; i++) {
-        const v = UTILS.getVelocity(CONFIG.MAXSPEED);
         const pos = UTILS.getPosition(40, 47.5, -39, 39);
-
-        const k = 1.5 + Math.random() * 1.5;
         const maxSpeed = Math.random() * (CONFIG.MAXSPEED - 5) + 5;
 
         agents.push(new Agent(
             i,
             pos[0], 2, pos[1],
-            v[0], 0, v[1],
+            0, 0, 0,
             0, 0, 0,
             0, 2, 0,
-            CONFIG.RADIUS, maxSpeed, CONFIG.MAXFORCE, CONFIG.HORIZON, k
+            CONFIG.RADIUS, maxSpeed, CONFIG.MAXFORCE, CONFIG.HORIZON, 
+            CONFIG.K, CONFIG.AVOID, CONFIG.SIDESTEP
         ));
         agents[i].setData("group", 1);
         agentsTargets.push(new THREE.Vector3(agents[i].position.x, 2, agents[i].position.z));
@@ -91,20 +92,17 @@ function init() {
     }
 
     for (let i = 0; i < CONFIG.COUNT; i++) {
-        const v = UTILS.getVelocity(CONFIG.MAXSPEED);
         const pos = UTILS.getPosition(0, 23, -39, 39);
-
-        const k = 1.5 + Math.random() * 1.5;
         const maxSpeed = Math.random() * (CONFIG.MAXSPEED - 5) + 5;
-        const maxForce = 30 + Math.random() * 40;  
 
         agents.push(new Agent(
             i + CONFIG.COUNT,
             pos[0], 2, pos[1],
-            v[0], 0, v[1],
+            0, 0, 0,
             0, 0, 0,
             0, 2, 0,
-            CONFIG.RADIUS, maxSpeed, maxForce, CONFIG.HORIZON, k
+            CONFIG.RADIUS, maxSpeed, CONFIG.MAXFORCE, CONFIG.HORIZON,
+            CONFIG.K, CONFIG.AVOID, CONFIG.SIDESTEP,
         ));
         agents[i + CONFIG.COUNT].setData("group", 2);
     }

@@ -1,9 +1,7 @@
 import * as UTILS from './utils.js'
 import * as THREE from 'three';
 
-const SIDESTEP_STRENGTH = 0.5;
-
-function timeToCollision(agent, neighbor) {
+export function timeToCollision(agent, neighbor) {
     const r = agent.radius + neighbor.radius;
     const w = new THREE.Vector3(neighbor.position.x - agent.position.x, 0, neighbor.position.z - agent.position.z);
     
@@ -54,15 +52,18 @@ export function updateAgents(agent, agents, timestep) {
     let fxAvoid = 0;
     let fzAvoid = 0;
 
+    let fxSidestep = 0;
+    let fzSidestep = 0;
+
     agents.forEach(function(neighbor) {
         if (neighbor.id != agent.id) {
             const t = timeToCollision(agent, neighbor);
 
             // predicted direction vector in future
             const dir = new THREE.Vector3(
-                (agent.position.x + agent.velocity.x * t) - (neighbor.position.x + neighbor.velocity.x * t),
+                agent.position.x - neighbor.position.x,
                 0,
-                (agent.position.z + agent.velocity.z * t) - (neighbor.position.z + neighbor.velocity.z * t)
+                agent.position.z - neighbor.position.z
             ).normalize();
 
             // global left and right directions, 90 deg rotation from up vector
@@ -84,17 +85,17 @@ export function updateAgents(agent, agents, timestep) {
             if (t >= 0 && t <= agent.horizon) {
                 let avoidanceWeight = (agent.horizon - t) / (t + UTILS.EPSILON);
 
-                fxAvoid += dir.x * avoidanceWeight;
-                fzAvoid += dir.z * avoidanceWeight;
+                fxAvoid += agent.avoid * dir.x * avoidanceWeight;
+                fzAvoid += agent.avoid * dir.z * avoidanceWeight;
 
-                fxAvoid += SIDESTEP_STRENGTH * sidestep.x * avoidanceWeight;
-                fzAvoid += SIDESTEP_STRENGTH * sidestep.z * avoidanceWeight;
+                fxSidestep += agent.sidestep * sidestep.x * avoidanceWeight;
+                fzSidestep += agent.sidestep * sidestep.z * avoidanceWeight;
             }
         }
     });
 
-    const fx = fxGoal + fxAvoid;
-    const fz = fzGoal + fzAvoid;
+    const fx = fxGoal + fxAvoid + fxSidestep;
+    const fz = fzGoal + fzAvoid + fzSidestep;
 
     applyForce(agent, new THREE.Vector3(fx, 0, fz), timestep);
 }

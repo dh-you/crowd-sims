@@ -13,8 +13,11 @@ const CONFIG = {
     COUNT: 102,
     RADIUS: 1,
     MAXSPEED: 5,
-    MAXFORCE: 50,
-    HORIZON: 50,
+    MAXFORCE: 30,
+    HORIZON: 10,
+    K: 2,
+    AVOID: 5,
+    SIDESTEP: 10,
 }
 
 let leftRows = [];
@@ -76,20 +79,17 @@ function init() {
             seat.position.set(j, UTILS.EPSILON * 2, i);
             scene.add(seat);
 
-            const v = UTILS.getVelocity(CONFIG.MAXSPEED);
-
-            const k = 1.5 + Math.random() * 1.5;
-
             agents.push(new Agent(
-                i,
+                --CONFIG.COUNT,
                 j, 2, i,
-                v[0], 0, v[1], 
+                0, 0, 1, 
                 0, 0, 0,
                 j, 2, i,
-                CONFIG.RADIUS, CONFIG.MAXSPEED, CONFIG.MAXFORCE, CONFIG.HORIZON, k                   
+                CONFIG.RADIUS, CONFIG.MAXSPEED + Math.random() * 5, CONFIG.MAXFORCE, CONFIG.HORIZON, 
+                CONFIG.K, CONFIG.AVOID, CONFIG.SIDESTEP,                  
             ));
             row.push(agents[agents.length-1]);
-        }
+        } 
         leftRows.push(row.splice(0, 3));
         rightRows.push(row.splice(0, 3));
         // random order for left row and right row exiting
@@ -142,6 +142,7 @@ function animate() {
             } else {
                 agentInAisle.target.z = 45;
                 agentInAisle.setData("state", "EXITING");
+                // agentInAisle.horizon = 10;
                 aisle[rowNum] = null;
             }
         } else if (orders[rowNum].length === 0) {

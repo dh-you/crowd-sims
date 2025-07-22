@@ -11,7 +11,10 @@ const CONFIG = {
     COUNT: 50,
     RADIUS: 1,
     MAXSPEED: 7.5,
-    HORIZON: 100,
+    HORIZON: 10,
+    K: 2,
+    AVOID: 5,
+    SIDESTEP: 5,
     MINCOMFORT: 10,
     MAXCOMFORT: 25,
     MAXFORCE: 50,
@@ -65,18 +68,17 @@ function init() {
     scene.add(streetPlane);
 
     for (let i = 0; i < CONFIG.COUNT; i++) {
-        const v = UTILS.getVelocity(CONFIG.MAXSPEED);
         const pos = UTILS.getPosition(-45, 45, -15, 15);
-        const k = 1.5 + Math.random() * 1.5;
         const maxSpeed = Math.random() * (CONFIG.MAXSPEED - 5) + 5;
 
         agents.push(new Agent(
             i,
             pos[0], 2, pos[1],
-            v[0], 0, v[1],
+            0, 0, 0,
             0, 0, 0,
             50 * (Math.random() < 0.5 ? -1 : 1), 2, pos[1],
-            CONFIG.RADIUS, maxSpeed, CONFIG.MAXFORCE, CONFIG.HORIZON, k
+            CONFIG.RADIUS, maxSpeed, CONFIG.MAXFORCE, CONFIG.HORIZON, 
+            CONFIG.K, CONFIG.AVOID, CONFIG.SIDESTEP,
         ));
         agents[i].setData("state", "WALKING");
 
