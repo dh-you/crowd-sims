@@ -14,10 +14,10 @@ const CONFIG = {
     RADIUS: 1,
     MAXSPEED: 5,
     MAXFORCE: 30,
-    HORIZON: 10,
+    HORIZON: 5,
     K: 2,
-    AVOID: 5,
-    SIDESTEP: 10,
+    AVOID: 10,
+    SIDESTEP: 5,
 }
 
 let leftRows = [];
@@ -48,6 +48,8 @@ function init() {
     const wallsData = [
         [90, 4, false, new THREE.Vector3(14, 2, -5)],
         [100, 4, false, new THREE.Vector3(-14, 2, 0)],
+        [11, 4, true, new THREE.Vector3(8.5, 2, 40)],
+        [11, 4, true, new THREE.Vector3(-8.5, 2, 40)]
     ];
 
     wallsData.forEach(([width, height, vertical, position]) => {
@@ -79,14 +81,18 @@ function init() {
             seat.position.set(j, UTILS.EPSILON * 2, i);
             scene.add(seat);
 
+            const maxSpeed = (Math.random() * 4) - 2 + CONFIG.MAXSPEED;
+            const k = (Math.random() * 3) - 1.5 + CONFIG.K;
+            const horizon = (Math.random() * 10) - 5 + CONFIG.HORIZON;
+
             agents.push(new Agent(
                 --CONFIG.COUNT,
                 j, 2, i,
                 0, 0, 1, 
                 0, 0, 0,
                 j, 2, i,
-                CONFIG.RADIUS, CONFIG.MAXSPEED + Math.random() * 5, CONFIG.MAXFORCE, CONFIG.HORIZON, 
-                CONFIG.K, CONFIG.AVOID, CONFIG.SIDESTEP,                  
+                CONFIG.RADIUS, maxSpeed, CONFIG.MAXFORCE, horizon, 
+                k, CONFIG.AVOID, CONFIG.SIDESTEP,                  
             ));
             row.push(agents[agents.length-1]);
         } 
@@ -134,7 +140,7 @@ function animate() {
 
         agentInAisle = aisle[rowNum];
         if (agentInAisle) {
-            const reachedAisle = Math.abs(agentInAisle.position.x) < 2;
+            const reachedAisle = Math.abs(agentInAisle.position.x) < 1.5;
 
             // do not let next agent move until agent in the aisle has left 
             if (!reachedAisle) {
@@ -142,7 +148,6 @@ function animate() {
             } else {
                 agentInAisle.target.z = 45;
                 agentInAisle.setData("state", "EXITING");
-                // agentInAisle.horizon = 10;
                 aisle[rowNum] = null;
             }
         } else if (orders[rowNum].length === 0) {
@@ -152,8 +157,17 @@ function animate() {
     
     agents.forEach(function(member) {
         // navigate out of plane
-        if (member.getData("state") == "EXITING" && member.position.z >= 44) {
-            member.target.x = 200;
+        if (member.getData("state") == "EXITING") {
+            if (member.position.z >= 44) {
+                member.target.x = 200;
+                member.setData("state", "EXITED");
+            } else if (member.position.z < 40) {
+                if (member.position.x > 2.5 - CONFIG.RADIUS) {
+                    member.position.x = 2.5 - CONFIG.RADIUS;
+                } else if (member.position.x < -2.5 + CONFIG.RADIUS) {
+                    member.position.x = -2.5 + CONFIG.RADIUS;
+                }
+            }
         }
     });
 

@@ -14,6 +14,8 @@ const CONFIG = {
     MAXFORCE: 30,
     HORIZON: 10,
     K: 2,
+    AVOID: 5,
+    SIDESTEP: 10,
 }
 
 const agentMat = new THREE.MeshLambertMaterial({
@@ -31,7 +33,8 @@ function init() {
         0, 0, 0, 
         0, 0, 0,
         0, 2, 50,
-        CONFIG.RADIUS, CONFIG.MAXSPEED + 5, CONFIG.MAXFORCE, CONFIG.HORIZON, CONFIG.K                   
+        CONFIG.RADIUS, CONFIG.MAXSPEED + 5, CONFIG.MAXFORCE, CONFIG.HORIZON, 
+        CONFIG.K, CONFIG.AVOID, CONFIG.SIDESTEP                   
     ));
 
     agents.push(new Agent(
@@ -40,7 +43,8 @@ function init() {
         0, 0, 0, 
         0, 0, 0,
         0, 2, 50,
-        CONFIG.RADIUS, CONFIG.MAXSPEED, CONFIG.MAXFORCE, CONFIG.HORIZON, CONFIG.K                   
+        CONFIG.RADIUS, CONFIG.MAXSPEED, CONFIG.MAXFORCE, CONFIG.HORIZON, 
+        CONFIG.K, CONFIG.AVOID, CONFIG.SIDESTEP                   
     ));
 
     agents.forEach(function(member) {

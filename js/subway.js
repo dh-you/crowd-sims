@@ -126,6 +126,8 @@ function init() {
 
 function animate() {
     requestAnimationFrame(animate);
+    timestep = document.getElementById("timestep").value;
+    document.getElementById("timestepValue").innerHTML = timestep;
     
     // subway arriving at station animation
     if (!animationDone) {
@@ -133,7 +135,7 @@ function animate() {
 
         // smoothly lerp walls 
         for (let i = 0; i < walls.length; i++) {
-            walls[i].mesh.position.lerp(wallTargets[i], 0.005);
+            walls[i].mesh.position.lerp(wallTargets[i], timestep);
 
             if (walls[i].mesh.position.distanceTo(wallTargets[i]) > 0.1) {
                 done = false;
@@ -143,7 +145,7 @@ function animate() {
         }
 
         // smoothly lerp floor
-        floor.position.lerp(new THREE.Vector3(42.5, 0.05, 0), 0.005);
+        floor.position.lerp(new THREE.Vector3(42.5, 0.05, 0), timestep);
         if (floor.position.distanceTo(new THREE.Vector3(42.5, 0.05, 0)) > 0.1) {
             done = false;
         }
@@ -151,7 +153,7 @@ function animate() {
         // smoothly lerp agents
         for (let i = 0; i < agents.length; i++) {
             if (agents[i].getData("group") == 1) {
-                agents[i].position.lerp(agentsTargets[i], 0.005);
+                agents[i].position.lerp(agentsTargets[i], timestep);
 
                 if (agents[i].position.distanceTo(agentsTargets[i]) > 0.1) {
                     done = false;
@@ -194,8 +196,6 @@ function animate() {
         }
     });
 
-    timestep = document.getElementById("timestep").value;
-    document.getElementById("timestepValue").innerHTML = timestep;
     agents.forEach(function(member) {
         updateAgents(member, agents, timestep);
     });
