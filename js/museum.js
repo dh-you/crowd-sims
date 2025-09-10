@@ -17,7 +17,7 @@ const CONFIG = {
     HORIZON: 1,
     K: 2,
     AVOID: 5,
-    SIDESTEP: 5,    
+    SIDESTEP: 5,
     TRANSITIONCAP: 20,
     wAgent: 30,
     wPainting: 80,
@@ -36,12 +36,53 @@ let inTransition = 0;
 let pickableObjects = [];
 const raycaster = new THREE.Raycaster();
 
+let pauseButton = document.getElementById("pause");
+pauseButton.addEventListener("click", pauseButtonLogic);
+
+let downloadButton = document.getElementById("download");
+downloadButton.addEventListener("click", downloadButtonLogic);
+
 const agentMat = new THREE.MeshLambertMaterial({
     color: 0x00ff00
 });
 
-const { renderer, scene, camera } = createScene();
+const { renderer, scene, camera, world } = createScene();
 init();
+
+function pauseButtonLogic() {
+    console.log("pause");
+    world.pause = !world.pause;
+    if (!world.pause) {
+        pauseButton.src = "../resources/icons/8666604_pause_icon.png";
+    } else {
+        pauseButton.src = "../resources/icons/8666634_play_icon.png";
+    }
+}
+
+function parsePositions() {
+    let result = "";
+    for (let i = 1; i <= world.frame; i++) {
+        let curData = world.positions[i];
+        let keys = Object.keys(curData);
+        keys.forEach((k, idx) => {
+            let curAgent = curData[k];
+            result += curAgent.x.toFixed(4) + "," + curAgent.z.toFixed(4);
+            result += (idx < keys.length - 1) ? "," : "\n";
+        });
+    }
+    return result;
+}
+
+function downloadButtonLogic() {
+    console.log("download");
+    if (Object.keys(world.positions).length > 0) {
+        let textFile = parsePositions();
+        let a = document.createElement('a');
+        a.href = "data:application/octet-stream," + encodeURIComponent(textFile);
+        a.download = 'trajectories.txt';
+        a.click();
+    }
+}
 
 // balance distance from agent and distance to painting preferences
 function weightedScore(point, agent, painting) {
@@ -64,19 +105,19 @@ function generateExitPosition(agent) {
 function choosePainting(agent) {
     let unblockedPaintings = [];
 
-    paintings.forEach(function(painting) {
+    paintings.forEach(function (painting) {
         if (painting.mesh.id != agent.getData("painting")) {
             const dir = painting.mesh.position.clone().sub(agent.position.clone()).normalize();
             raycaster.set(agent.position.clone(), dir);
-            
+
             const intersects = raycaster.intersectObjects(pickableObjects, false);
             if (intersects.length < CONFIG.BLOCKED_THRESH) unblockedPaintings.push(painting.mesh);
         }
     });
 
     let minViewers = CONFIG.COUNT;
-    let bestPainting = paintings[Math.floor(Math.random()*paintings.length)]; // in case all is blocked
-    unblockedPaintings.forEach(function(painting) {
+    let bestPainting = paintings[Math.floor(Math.random() * paintings.length)]; // in case all is blocked
+    unblockedPaintings.forEach(function (painting) {
         if (viewerCounts[painting.id] < minViewers) {
             minViewers = viewerCounts[painting.id];
             bestPainting = painting;
@@ -134,9 +175,9 @@ function init() {
     // precompute onlooker positions
     const p = new FastPoissonDiskSampling({
         shape: [100, 100],
-        radius: 2*CONFIG.RADIUS,
+        radius: 2 * CONFIG.RADIUS,
         tries: 20
-    }); 
+    });
 
     let points = p.fill();
 
@@ -160,11 +201,11 @@ function init() {
         agents.push(new Agent(
             i,
             0, 2, 0,
-            0, 0, 0, 
+            0, 0, 0,
             0, 0, 0,
             0, 2, 0,
             CONFIG.RADIUS, maxSpeed, CONFIG.MAXFORCE, CONFIG.HORIZON,
-            CONFIG.K, CONFIG.AVOID, CONFIG.SIDESTEP                   
+            CONFIG.K, CONFIG.AVOID, CONFIG.SIDESTEP
         ));
 
         const painting = paintings[Math.floor(Math.random() * paintings.length)];
@@ -181,7 +222,7 @@ function init() {
         viewerCounts[painting.mesh.id]++;
     }
 
-    agents.forEach(function(member) {
+    agents.forEach(function (member) {
         const agentGeometry = new THREE.CylinderGeometry(member.radius, 1, 4, 16);
         const agentMaterial = new THREE.MeshLambertMaterial({
             color: 0x00ff00
@@ -201,67 +242,73 @@ let timer = 0;
 function animate(timestamp = 0) {
     requestAnimationFrame(animate);
 
-    const delta = (timestamp - prev) / 1000;
-    prev = timestamp;
+    if (!world.pause) {
+        const delta = (timestamp - prev) / 1000;
+        prev = timestamp;
 
-    timer += delta;
+        timer += delta;
 
-    agents.forEach(function(member) {
-        switch (member.getData("state")) {
-            case "VIEWING":            
-                // subtract time          
-                member.setData("timer", member.getData("timer") - (delta * timestep / 0.005));
-                
-                // navigate agent to exit point if there aren't too many other exiting agents
-                if (member.getData("timer") <= 0 && inTransition < CONFIG.TRANSITIONCAP) {
-                    inTransition++;
-                    member.target = generateExitPosition(member);
-                    member.setData("state", "EXITING");
-                    viewerCounts[member.getData("painting")]--;
-                } else if (member.getData("timer") <= 0 && inTransition >= CONFIG.TRANSITIONCAP) {
-                    member.setData("timer", Math.random() * 10);
-                }
-                break;
-            
-            case "EXITING":
-                // choose crowd with small crowd for agent to navigate to after exiting crowd
-                if (member.position.distanceTo(member.target) < 5) {
-                    const painting = choosePainting(member);
-                    viewingPoints.push(member.getData("viewingPosition"));
-                    member.setData("viewingPosition", generateViewingPosition(member, painting));
-                    member.target = member.getData("viewingPosition").clone();
-                    member.setData("painting", painting.id);
-                    member.setData("state", "WALKING");
-                    viewerCounts[member.getData("painting")]++;
-                }
-                break;
+        agents.forEach(function (member) {
+            switch (member.getData("state")) {
+                case "VIEWING":
+                    // subtract time          
+                    member.setData("timer", member.getData("timer") - (delta * timestep / 0.005));
 
-            case "WALKING":
-                // set new timer for viewer once painting is reached
-                if (member.position.distanceTo(member.getData("viewingPosition")) < 5) {
-                    inTransition--;
-                    member.setData("timer", Math.random() * 10);
-                    member.setData("state", "VIEWING");
-                }
-                break;
-        } 
-    });
+                    // navigate agent to exit point if there aren't too many other exiting agents
+                    if (member.getData("timer") <= 0 && inTransition < CONFIG.TRANSITIONCAP) {
+                        inTransition++;
+                        member.target = generateExitPosition(member);
+                        member.setData("state", "EXITING");
+                        viewerCounts[member.getData("painting")]--;
+                    } else if (member.getData("timer") <= 0 && inTransition >= CONFIG.TRANSITIONCAP) {
+                        member.setData("timer", Math.random() * 10);
+                    }
+                    break;
 
-    timestep = document.getElementById("timestep").value;
-    document.getElementById("timestepValue").innerHTML = timestep;
-    agents.forEach(function(member) {
-        updateAgents(member, agents, timestep);
-    });
+                case "EXITING":
+                    // choose crowd with small crowd for agent to navigate to after exiting crowd
+                    if (member.position.distanceTo(member.target) < 5) {
+                        const painting = choosePainting(member);
+                        viewingPoints.push(member.getData("viewingPosition"));
+                        member.setData("viewingPosition", generateViewingPosition(member, painting));
+                        member.target = member.getData("viewingPosition").clone();
+                        member.setData("painting", painting.id);
+                        member.setData("state", "WALKING");
+                        viewerCounts[member.getData("painting")]++;
+                    }
+                    break;
 
-    agents.forEach(function(agent) {
-        walls.forEach(function(wall) {
-            wall.collisionResolve(agent);
+                case "WALKING":
+                    // set new timer for viewer once painting is reached
+                    if (member.position.distanceTo(member.getData("viewingPosition")) < 5) {
+                        inTransition--;
+                        member.setData("timer", Math.random() * 10);
+                        member.setData("state", "VIEWING");
+                    }
+                    break;
+            }
         });
-    });
 
-    agents.forEach(function(member) {
+        timestep = document.getElementById("timestep").value;
+        document.getElementById("timestepValue").innerHTML = timestep;
+        agents.forEach(function (member) {
+            updateAgents(member, agents, timestep);
+        });
+
+        agents.forEach(function (agent) {
+            walls.forEach(function (wall) {
+                wall.collisionResolve(agent);
+            });
+        });
+    }
+    world.frame++;
+    world.positions[world.frame] = {};
+
+    agents.forEach(function (member, index) {
+        world.positions[world.frame][index] = { "x": member.position.x, "z": member.position.z, "rotation": member.getData("agent").rotation.z };
+
         member.getData("agent").position.copy(member.position);
-        member.getData("agent").material = agentMat;
+        member.getData('agent').material = agentMat;
     });
 
     renderer.render(scene, camera);

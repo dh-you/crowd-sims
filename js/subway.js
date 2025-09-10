@@ -20,12 +20,18 @@ const CONFIG = {
     SIDESTEP: 5,
 }
 
-const gaps = [-33, -11, 11, 33];  
+const gaps = [-33, -11, 11, 33];
 let wallTargets = [];
 let agentsTargets = [];
 let assigned = [];
 let floor;
 let animationDone = false;
+
+let pauseButton = document.getElementById("pause");
+pauseButton.addEventListener("click", pauseButtonLogic);
+
+let downloadButton = document.getElementById("download");
+downloadButton.addEventListener("click", downloadButtonLogic);
 
 const group1Mat = new THREE.MeshLambertMaterial({
     color: 0x00ff00
@@ -34,8 +40,43 @@ const group2Mat = new THREE.MeshLambertMaterial({
     color: 0xff0000
 });
 
-const { renderer, scene, camera } = createScene();
+const { renderer, scene, camera, world } = createScene();
 init();
+
+function pauseButtonLogic() {
+    console.log("pause");
+    world.pause = !world.pause;
+    if (!world.pause) {
+        pauseButton.src = "../resources/icons/8666604_pause_icon.png";
+    } else {
+        pauseButton.src = "../resources/icons/8666634_play_icon.png";
+    }
+}
+
+function parsePositions() {
+    let result = "";
+    for (let i = 1; i <= world.frame; i++) {
+        let curData = world.positions[i];
+        let keys = Object.keys(curData);
+        keys.forEach((k, idx) => {
+            let curAgent = curData[k];
+            result += curAgent.x.toFixed(4) + "," + curAgent.z.toFixed(4);
+            result += (idx < keys.length - 1) ? "," : "\n";
+        });
+    }
+    return result;
+}
+
+function downloadButtonLogic() {
+    console.log("download");
+    if (Object.keys(world.positions).length > 0) {
+        let textFile = parsePositions();
+        let a = document.createElement('a');
+        a.href = "data:application/octet-stream," + encodeURIComponent(textFile);
+        a.download = 'trajectories.txt';
+        a.click();
+    }
+}
 
 function nearestDoor(z) {
     return gaps.sort((a, b) => Math.abs(z - a) - Math.abs(z - b))[0];
@@ -66,7 +107,7 @@ function init() {
     const geometry9 = new THREE.PlaneGeometry(100, 15);
     const plane9 = new THREE.Mesh(geometry9, floorMaterial);
     plane9.castShadow = true;
-    plane9.receiveShadow = true;    
+    plane9.receiveShadow = true;
     plane9.rotation.set(Math.PI / 2, 0, Math.PI / 2);
     plane9.position.set(42.5, 0.05, 200);
     floor = plane9;
@@ -82,7 +123,7 @@ function init() {
             0, 0, 0,
             0, 0, 0,
             0, 2, 0,
-            CONFIG.RADIUS, maxSpeed, CONFIG.MAXFORCE, CONFIG.HORIZON, 
+            CONFIG.RADIUS, maxSpeed, CONFIG.MAXFORCE, CONFIG.HORIZON,
             CONFIG.K, CONFIG.AVOID, CONFIG.SIDESTEP
         ));
         agents[i].setData("group", 1);
@@ -126,87 +167,94 @@ function init() {
 
 function animate() {
     requestAnimationFrame(animate);
-    timestep = document.getElementById("timestep").value;
-    document.getElementById("timestepValue").innerHTML = timestep;
-    
-    // subway arriving at station animation
-    if (!animationDone) {
-        let done = true;
 
-        // smoothly lerp walls 
-        for (let i = 0; i < walls.length; i++) {
-            walls[i].mesh.position.lerp(wallTargets[i], timestep);
+    if (!world.pause) {
+        timestep = document.getElementById("timestep").value;
+        document.getElementById("timestepValue").innerHTML = timestep;
 
-            if (walls[i].mesh.position.distanceTo(wallTargets[i]) > 0.1) {
-                done = false;
-            } else {
-                walls[i].box.setFromObject(walls[i].mesh);
-            }
-        }
+        // subway arriving at station animation
+        if (!animationDone) {
+            let done = true;
 
-        // smoothly lerp floor
-        floor.position.lerp(new THREE.Vector3(42.5, 0.05, 0), timestep);
-        if (floor.position.distanceTo(new THREE.Vector3(42.5, 0.05, 0)) > 0.1) {
-            done = false;
-        }
+            // smoothly lerp walls 
+            for (let i = 0; i < walls.length; i++) {
+                walls[i].mesh.position.lerp(wallTargets[i], timestep);
 
-        // smoothly lerp agents
-        for (let i = 0; i < agents.length; i++) {
-            if (agents[i].getData("group") == 1) {
-                agents[i].position.lerp(agentsTargets[i], timestep);
-
-                if (agents[i].position.distanceTo(agentsTargets[i]) > 0.1) {
+                if (walls[i].mesh.position.distanceTo(wallTargets[i]) > 0.1) {
                     done = false;
+                } else {
+                    walls[i].box.setFromObject(walls[i].mesh);
                 }
             }
-            agents[i].getData("agent").position.copy(agents[i].position);
-            agents[i].getData("agent").material = agents[i].getData("group") == 1 ? group1Mat : group2Mat;
-        }
 
-        if (done) {
-            animationDone = true;
-        }
+            // smoothly lerp floor
+            floor.position.lerp(new THREE.Vector3(42.5, 0.05, 0), timestep);
+            if (floor.position.distanceTo(new THREE.Vector3(42.5, 0.05, 0)) > 0.1) {
+                done = false;
+            }
 
-        renderer.render(scene, camera);
-        return;
-    }
+            // smoothly lerp agents
+            for (let i = 0; i < agents.length; i++) {
+                if (agents[i].getData("group") == 1) {
+                    agents[i].position.lerp(agentsTargets[i], timestep);
 
-    agents.forEach(function(member) {
-        // navigate agents to subway doors and outside
-        switch (member.getData("group")) {
-            case 1:
-                if (member.position.x > 35 + CONFIG.RADIUS && !assigned[member.id]) {
-                    member.target.z = nearestDoor(member.position.z);
-                    member.target.x = 35 - 0.5;
-                } else if (!assigned[member.id]) {
-                    [member.target.x, member.target.z] = UTILS.getPosition(0, 23, -39, 39);
-                    assigned[member.id] = true;
+                    if (agents[i].position.distanceTo(agentsTargets[i]) > 0.1) {
+                        done = false;
+                    }
                 }
-                break;
-                
-            case 2:
-                if (member.position.x < 35 - CONFIG.RADIUS && !assigned[member.id]) {
-                    member.target.z = nearestDoor(member.position.z);
-                    member.target.x = 35 + 0.5;
-                } else if (!assigned[member.id]) {
-                    [member.target.x, member.target.z] = UTILS.getPosition(40, 47.5, -39, 39);
-                    assigned[member.id] = true;
-                } 
-                break;
+                agents[i].getData("agent").position.copy(agents[i].position);
+                agents[i].getData("agent").material = agents[i].getData("group") == 1 ? group1Mat : group2Mat;
+            }
+
+            if (done) {
+                animationDone = true;
+            }
+
+            renderer.render(scene, camera);
+            return;
         }
-    });
 
-    agents.forEach(function(member) {
-        updateAgents(member, agents, timestep);
-    });
+        agents.forEach(function (member) {
+            // navigate agents to subway doors and outside
+            switch (member.getData("group")) {
+                case 1:
+                    if (member.position.x > 35 + CONFIG.RADIUS && !assigned[member.id]) {
+                        member.target.z = nearestDoor(member.position.z);
+                        member.target.x = 35 - 0.5;
+                    } else if (!assigned[member.id]) {
+                        [member.target.x, member.target.z] = UTILS.getPosition(0, 23, -39, 39);
+                        assigned[member.id] = true;
+                    }
+                    break;
 
-    agents.forEach(function(agent) {
-        walls.forEach(function(wall) {
-            wall.collisionResolve(agent);
+                case 2:
+                    if (member.position.x < 35 - CONFIG.RADIUS && !assigned[member.id]) {
+                        member.target.z = nearestDoor(member.position.z);
+                        member.target.x = 35 + 0.5;
+                    } else if (!assigned[member.id]) {
+                        [member.target.x, member.target.z] = UTILS.getPosition(40, 47.5, -39, 39);
+                        assigned[member.id] = true;
+                    }
+                    break;
+            }
         });
-    });
 
-    agents.forEach(function(member) {
+        agents.forEach(function (member) {
+            updateAgents(member, agents, timestep);
+        });
+
+        agents.forEach(function (agent) {
+            walls.forEach(function (wall) {
+                wall.collisionResolve(agent);
+            });
+        });
+    }
+    world.frame++;
+    world.positions[world.frame] = {};
+
+    agents.forEach(function (member, index) {
+        world.positions[world.frame][index] = { "x": member.position.x, "z": member.position.z, "rotation": member.getData("agent").rotation.z };
+
         member.getData("agent").position.copy(member.position);
         member.getData("agent").material = member.getData("group") == 1 ? group1Mat : group2Mat;
     });

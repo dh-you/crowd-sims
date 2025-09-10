@@ -20,12 +20,53 @@ const CONFIG = {
     SIDESTEP: 5,
 }
 
+let pauseButton = document.getElementById("pause");
+pauseButton.addEventListener("click", pauseButtonLogic);
+
+let downloadButton = document.getElementById("download");
+downloadButton.addEventListener("click", downloadButtonLogic);
+
 const agentMat = new THREE.MeshLambertMaterial({
     color: 0x00ff00
 });
 
-const { renderer, scene, camera } = createScene();
+const { renderer, scene, camera, world } = createScene();
 init();
+
+function pauseButtonLogic() {
+    console.log("pause");
+    world.pause = !world.pause;
+    if (!world.pause) {
+        pauseButton.src = "../resources/icons/8666604_pause_icon.png";
+    } else {
+        pauseButton.src = "../resources/icons/8666634_play_icon.png";
+    }
+}
+
+function parsePositions() {
+    let result = "";
+    for (let i = 1; i <= world.frame; i++) {
+        let curData = world.positions[i];
+        let keys = Object.keys(curData);
+        keys.forEach((k, idx) => {
+            let curAgent = curData[k];
+            result += curAgent.x.toFixed(4) + "," + curAgent.z.toFixed(4);
+            result += (idx < keys.length - 1) ? "," : "\n";
+        });
+    }
+    return result;
+}
+
+function downloadButtonLogic() {
+    console.log("download");
+    if (Object.keys(world.positions).length > 0) {
+        let textFile = parsePositions();
+        let a = document.createElement('a');
+        a.href = "data:application/octet-stream," + encodeURIComponent(textFile);
+        a.download = 'trajectories.txt';
+        a.click();
+    }
+}
 
 function init() {
     const wallData = [
@@ -64,16 +105,16 @@ function init() {
 
         agents.push(new Agent(
             i,
-            pos[0], 2, pos[1],            
+            pos[0], 2, pos[1],
             0, 0, 0,
             0, 0, 0,
-            0, 2, pos[1],            
+            0, 2, pos[1],
             CONFIG.RADIUS, maxSpeed, CONFIG.MAXFORCE, CONFIG.HORIZON,
             CONFIG.K, CONFIG.AVOID, CONFIG.SIDESTEP
         ));
     }
 
-    agents.forEach(function(member) {
+    agents.forEach(function (member) {
         const agentGeometry = new THREE.CylinderGeometry(member.radius, 1, 4, 16);
         const agentMaterial = new THREE.MeshLambertMaterial({
             color: 0x00ff00
@@ -89,49 +130,55 @@ function init() {
 function animate() {
     requestAnimationFrame(animate);
 
-    agents.forEach(function(member) {
-        // wrap around
-        if (member.position.z > LENGTH / 2 - CONFIG.RADIUS) {
-            member.position.z = LENGTH / 2 - CONFIG.RADIUS;
-        } else if (member.position.z < -LENGTH / 2 + CONFIG.RADIUS) {
-            member.position.z = -LENGTH / 2 + CONFIG.RADIUS;
-        }
-
-        // choose left or right walkway
-        member.target.z = member.position.z < 0 ? -12.5 : 12.5;
-        member.target.x = -32.5;
-
-        // boost speed if in walkway
-        if (member.position.x >= -30 && member.position.x <= 30) {
-            if (member.position.z < 0 && member.position.z > -15 && member.position.z < -10) {
-                member.maxSpeed = CONFIG.MAXSPEED * 1.5;
-            } else if (member.position.z > 10 && member.position.z < 15) {
-                member.maxSpeed = CONFIG.MAXSPEED * 1.5;
+    if (!world.pause) {
+        agents.forEach(function (member) {
+            // wrap around
+            if (member.position.z > LENGTH / 2 - CONFIG.RADIUS) {
+                member.position.z = LENGTH / 2 - CONFIG.RADIUS;
+            } else if (member.position.z < -LENGTH / 2 + CONFIG.RADIUS) {
+                member.position.z = -LENGTH / 2 + CONFIG.RADIUS;
             }
-        }
 
-        // funnel agents through walkway
-        const nearEntry = Math.abs(member.position.x + 32.5) <= 7.5;
-        const left = member.position.z > 10 && member.position.z < 15;
-        const right = member.position.z > -15 && member.position.z < -10;
-        if ((nearEntry && (left || right)) || (member.position.x >= -30 && (left || right)) ||  member.position.x >= 25) {
-            member.target.x = 200;
-        }
-    });
+            // choose left or right walkway
+            member.target.z = member.position.z < 0 ? -12.5 : 12.5;
+            member.target.x = -32.5;
 
-    timestep = document.getElementById("timestep").value;
-    document.getElementById("timestepValue").innerHTML = timestep;
-    agents.forEach(function(member) {
-        updateAgents(member, agents, timestep);
-    });
+            // boost speed if in walkway
+            if (member.position.x >= -30 && member.position.x <= 30) {
+                if (member.position.z < 0 && member.position.z > -15 && member.position.z < -10) {
+                    member.maxSpeed = CONFIG.MAXSPEED * 1.5;
+                } else if (member.position.z > 10 && member.position.z < 15) {
+                    member.maxSpeed = CONFIG.MAXSPEED * 1.5;
+                }
+            }
 
-    agents.forEach(function(agent) {
-        walls.forEach(function(wall) {
-            wall.collisionResolve(agent);
+            // funnel agents through walkway
+            const nearEntry = Math.abs(member.position.x + 32.5) <= 7.5;
+            const left = member.position.z > 10 && member.position.z < 15;
+            const right = member.position.z > -15 && member.position.z < -10;
+            if ((nearEntry && (left || right)) || (member.position.x >= -30 && (left || right)) || member.position.x >= 25) {
+                member.target.x = 200;
+            }
         });
-    });
 
-    agents.forEach(function(member) {
+        timestep = document.getElementById("timestep").value;
+        document.getElementById("timestepValue").innerHTML = timestep;
+        agents.forEach(function (member) {
+            updateAgents(member, agents, timestep);
+        });
+
+        agents.forEach(function (agent) {
+            walls.forEach(function (wall) {
+                wall.collisionResolve(agent);
+            });
+        });
+    }
+    world.frame++;
+    world.positions[world.frame] = {};
+
+    agents.forEach(function (member, index) {
+        world.positions[world.frame][index] = { "x": member.position.x, "z": member.position.z, "rotation": member.getData("agent").rotation.z };
+
         member.getData("agent").position.copy(member.position);
         member.getData('agent').material = agentMat;
     });

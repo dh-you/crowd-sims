@@ -30,6 +30,12 @@ let selected = null;
 let mouse = new THREE.Vector2();
 const raycaster = new THREE.Raycaster();
 
+let pauseButton = document.getElementById("pause");
+pauseButton.addEventListener("click", pauseButtonLogic);
+
+let downloadButton = document.getElementById("download");
+downloadButton.addEventListener("click", downloadButtonLogic);
+
 const pedestrianMat = new THREE.MeshLambertMaterial({
     color: 0x00ff00
 });
@@ -42,9 +48,44 @@ const performerMat = new THREE.MeshLambertMaterial({
 
 const agentGeometry = new THREE.CylinderGeometry(CONFIG.RADIUS, 1, 4, 16);
 
-const { renderer, scene, camera } = createScene();
+const { renderer, scene, camera, world } = createScene();
 init();
 render();
+
+function pauseButtonLogic() {
+    console.log("pause");
+    world.pause = !world.pause;
+    if (!world.pause) {
+        pauseButton.src = "../resources/icons/8666604_pause_icon.png";
+    } else {
+        pauseButton.src = "../resources/icons/8666634_play_icon.png";
+    }
+}
+
+function parsePositions() {
+    let result = "";
+    for (let i = 1; i <= world.frame; i++) {
+        let curData = world.positions[i];
+        let keys = Object.keys(curData);
+        keys.forEach((k, idx) => {
+            let curAgent = curData[k];
+            result += curAgent.x.toFixed(4) + "," + curAgent.z.toFixed(4);
+            result += (idx < keys.length - 1) ? "," : "\n";
+        });
+    }
+    return result;
+}
+
+function downloadButtonLogic() {
+    console.log("download");
+    if (Object.keys(world.positions).length > 0) {
+        let textFile = parsePositions();
+        let a = document.createElement('a');
+        a.href = "data:application/octet-stream," + encodeURIComponent(textFile);
+        a.download = 'trajectories.txt';
+        a.click();
+    }
+}
 
 // balance distance from agent and distance to performer preferences
 function weightedScore(point, agent, performer) {
@@ -77,7 +118,7 @@ function init() {
             0, 0, 0,
             0, 0, 0,
             50 * (Math.random() < 0.5 ? -1 : 1), 2, pos[1],
-            CONFIG.RADIUS, maxSpeed, CONFIG.MAXFORCE, CONFIG.HORIZON, 
+            CONFIG.RADIUS, maxSpeed, CONFIG.MAXFORCE, CONFIG.HORIZON,
             CONFIG.K, CONFIG.AVOID, CONFIG.SIDESTEP,
         ));
         agents[i].setData("state", "WALKING");
@@ -104,7 +145,7 @@ function init() {
         shape: [100, 100],
         radius: 2 * CONFIG.RADIUS,
         tries: 20
-    }); 
+    });
 
     points = p.fill();
     points = points.map(([x, z]) => new THREE.Vector3(x - 50, 0, z - 50));
@@ -134,35 +175,41 @@ function render() {
 function animate() {
     requestAnimationFrame(animate);
 
-    agents.forEach(function(member) {
-        // wrap around
-        if (member.position.x < -LENGTH / 2 + CONFIG.RADIUS) { 
-            member.position.x = LENGTH / 2 - CONFIG.RADIUS;
-            member.position.z *= -1;
-        } else if (member.position.x > LENGTH / 2 - CONFIG.RADIUS) {
-            member.position.x = -LENGTH / 2 + CONFIG.RADIUS;
-            member.position.z *= -1;
-        }
+    if (!world.pause) {
+        agents.forEach(function (member) {
+            // wrap around
+            if (member.position.x < -LENGTH / 2 + CONFIG.RADIUS) {
+                member.position.x = LENGTH / 2 - CONFIG.RADIUS;
+                member.position.z *= -1;
+            } else if (member.position.x > LENGTH / 2 - CONFIG.RADIUS) {
+                member.position.x = -LENGTH / 2 + CONFIG.RADIUS;
+                member.position.z *= -1;
+            }
 
-        // navigate agent towards viewing position
-        if (selected != null && member.id == selected && member.getData("state") == "WALKING") {
-            member.setData("state", "VIEWING");
-            member.target = generateViewingPosition(member);
-        }
+            // navigate agent towards viewing position
+            if (selected != null && member.id == selected && member.getData("state") == "WALKING") {
+                member.setData("state", "VIEWING");
+                member.target = generateViewingPosition(member);
+            }
 
-        // lower agent horizon once in onlooker crowd
-        if (member.getData("state") == "VIEWING" && member.position.z > 20) {
-            member.horizon = 1;
-        }
-    });
+            // lower agent horizon once in onlooker crowd
+            if (member.getData("state") == "VIEWING" && member.position.z > 20) {
+                member.horizon = 1;
+            }
+        });
 
-    timestep = document.getElementById("timestep").value;
-    document.getElementById("timestepValue").innerHTML = timestep;
-    agents.forEach(function(member) {
-        updateAgents(member, agents, timestep);
-    });
+        timestep = document.getElementById("timestep").value;
+        document.getElementById("timestepValue").innerHTML = timestep;
+        agents.forEach(function (member) {
+            updateAgents(member, agents, timestep);
+        });
+    }
+    world.frame++;
+    world.positions[world.frame] = {};
 
-    agents.forEach(function(member) {
+    agents.forEach(function (member, index) {
+        world.positions[world.frame][index] = { "x": member.position.x, "z": member.position.z, "rotation": member.getData("agent").rotation.z };
+
         member.getData("agent").position.copy(member.position);
         member.getData("agent").material = member.getData("state") == "VIEWING" ? onlookerMat : pedestrianMat;
     });

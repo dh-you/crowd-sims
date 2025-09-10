@@ -6,7 +6,10 @@ export const LENGTH = 100;
 let renderer, scene, camera;
 const world = {
     x: LENGTH,
-    z: LENGTH
+    z: LENGTH,
+    pause: false,
+    frame: 0,
+    positions: {}
 };
 
 export function createScene() {
@@ -84,9 +87,9 @@ export function createScene() {
 
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     const envRT = pmremGenerator.fromScene(new THREE.Scene(), 0.04);
-    scene.environment = envRT.texture;  
+    scene.environment = envRT.texture;
 
-    return { renderer, scene, camera, controls };
+    return { renderer, scene, camera, world, controls };
 }
 
 function render() {

@@ -1,29 +1,49 @@
 <!DOCTYPE html>
-<html><head>
-<meta http-equiv="content-type" content="text/html; charset=UTF-8">
-<meta charset="utf-8">
-<title>Experiments</title>
+<html>
 
-<script type="importmap">
-  {
-    "imports": {
-      "three": "../build/three.module.js",
-      "three/addons/": "../examples/jsm/"
-    }
-  }
-</script>
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+  <meta charset="utf-8" />
+  <title>Experiments</title>
 
+  <script type="importmap">
+      {
+        "imports": {
+          "three": "../build/three.module.js",
+          "three/addons/": "../examples/jsm/"
+        }
+      }
+    </script>
 
-<script type="module" src="../js/experiments.js" ></script>
-
+  <script type="module" src="../js/experiments.js"></script>
 </head>
 
-<body style="margin:0;background:black;text-align:left;">
-  <div style="position:absolute;top:10px;left:10px;">
-    <label for="timestep" style="color:white;"> 
-    Timestep</label>
-    <input type="range" id="timestep" min="0.0" max="0.05" step="0.005" value="0.005">
-    <span id="timestepValue" style="color:white;">0.005</span>
+<body style="margin: 0; background: black; text-align: left">
+  <div style="position: absolute; top: 10px; left: 10px">
+    <label for="timestep" style="color: white"> Timestep</label>
+    <input type="range" id="timestep" min="0.0" max="0.05" step="0.005" value="0.005" />
+    <span id="timestepValue" style="color: white">0.005</span>
   </div>
+
+  <div style="position: absolute; top: 60px; left: 10px; z-index: 10;">
+    <input type="image" id="pause" src="../resources/icons/8666604_pause_icon.png" width="40" height="40"
+      style="background: white; cursor: pointer;" />
+  </div>
+  <div style="position: absolute; top: 60px; left: 60px; z-index: 10;">
+    <input type="image" id="download" src="../resources/icons/786223_download_icon.png" width="40" height="40"
+      style="background: white; cursor: pointer;" />
+  </div>
+
+  <script>
+    function pauseButton(elem) {
+      let event = new Event("pause");
+      elem.dispatchEvent(event, { srcElem: elem });
+    }
+    function downloadButton(elem) {
+      let event = new Event("download");
+      elem.dispatchEvent(event, { srcElem: elem });
+    }
+  </script>
 </body>
+
 </html>

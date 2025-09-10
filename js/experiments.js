@@ -18,36 +18,76 @@ const CONFIG = {
     SIDESTEP: 10,
 }
 
+let pauseButton = document.getElementById("pause");
+pauseButton.addEventListener("click", pauseButtonLogic);
+
+let downloadButton = document.getElementById("download");
+downloadButton.addEventListener("click", downloadButtonLogic);
+
 const agentMat = new THREE.MeshLambertMaterial({
     color: 0x00ff00
 });
 
-const { renderer, scene, camera } = createScene();
+const { renderer, scene, camera, world } = createScene();
 init();
-render();
+
+function pauseButtonLogic() {
+    console.log("pause");
+    world.pause = !world.pause;
+    if (!world.pause) {
+        pauseButton.src = "../resources/icons/8666604_pause_icon.png";
+    } else {
+        pauseButton.src = "../resources/icons/8666634_play_icon.png";
+    }
+}
+
+function parsePositions() {
+    let result = "";
+    for (let i = 1; i <= world.frame; i++) {
+        let curData = world.positions[i];
+        let keys = Object.keys(curData);
+        keys.forEach((k, idx) => {
+            let curAgent = curData[k];
+            result += curAgent.x.toFixed(4) + "," + curAgent.z.toFixed(4);
+            result += (idx < keys.length - 1) ? "," : "\n";
+        });
+    }
+    return result;
+}
+
+function downloadButtonLogic() {
+    console.log("download");
+    if (Object.keys(world.positions).length > 0) {
+        let textFile = parsePositions();
+        let a = document.createElement('a');
+        a.href = "data:application/octet-stream," + encodeURIComponent(textFile);
+        a.download = 'trajectories.txt';
+        a.click();
+    }
+}
 
 function init() {
     agents.push(new Agent(
         0,
         0, 2, -50,
-        0, 0, 0, 
+        0, 0, 0,
         0, 0, 0,
         0, 2, 50,
-        CONFIG.RADIUS, CONFIG.MAXSPEED + 5, CONFIG.MAXFORCE, CONFIG.HORIZON, 
-        CONFIG.K, CONFIG.AVOID, CONFIG.SIDESTEP                   
+        CONFIG.RADIUS, CONFIG.MAXSPEED + 5, CONFIG.MAXFORCE, CONFIG.HORIZON,
+        CONFIG.K, CONFIG.AVOID, CONFIG.SIDESTEP
     ));
 
     agents.push(new Agent(
         1,
         0, 2, -30,
-        0, 0, 0, 
+        0, 0, 0,
         0, 0, 0,
         0, 2, 50,
-        CONFIG.RADIUS, CONFIG.MAXSPEED, CONFIG.MAXFORCE, CONFIG.HORIZON, 
-        CONFIG.K, CONFIG.AVOID, CONFIG.SIDESTEP                   
+        CONFIG.RADIUS, CONFIG.MAXSPEED, CONFIG.MAXFORCE, CONFIG.HORIZON,
+        CONFIG.K, CONFIG.AVOID, CONFIG.SIDESTEP
     ));
 
-    agents.forEach(function(member) {
+    agents.forEach(function (member) {
         const agentGeometry = new THREE.CylinderGeometry(member.radius, 1, 4, 16);
         const agentMaterial = new THREE.MeshLambertMaterial({
             color: 0x00ff00
@@ -60,20 +100,22 @@ function init() {
     });
 }
 
-function render() {
-    renderer.render(scene, camera);
-}
-
 function animate() {
     requestAnimationFrame(animate);
 
-    timestep = document.getElementById("timestep").value;
-    document.getElementById("timestepValue").innerHTML = timestep;
-    agents.forEach(function(member) {
-        updateAgents(member, agents, timestep);
-    });
+    if (!world.pause) {
+        timestep = document.getElementById("timestep").value;
+        document.getElementById("timestepValue").innerHTML = timestep;
+        agents.forEach(function (member) {
+            updateAgents(member, agents, timestep);
+        });
+    }
+    world.frame++;
+    world.positions[world.frame] = {};
 
-    agents.forEach(function(member) {
+    agents.forEach(function (member, index) {
+        world.positions[world.frame][index] = { "x": member.position.x, "z": member.position.z, "rotation": member.getData("agent").rotation.z };
+
         member.getData("agent").position.copy(member.position);
         member.getData('agent').material = agentMat;
     });

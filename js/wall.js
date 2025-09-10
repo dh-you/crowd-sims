@@ -19,16 +19,16 @@ export class Wall {
         this.box = new THREE.Box3().setFromObject(this.mesh);
     }
 
-    collisionResolve(agent) {   
+    collisionResolve(agent) {
         agent.sphere.set(agent.position.clone(), agent.radius);
-        
-        if (this.box.intersectsSphere(agent.sphere)) {      
+
+        if (this.box.intersectsSphere(agent.sphere)) {
             // get collision direction
-            const closest = this.box.clampPoint(agent.position, new THREE.Vector3());     
-            const push = agent.position.clone().sub(closest); 
+            const closest = this.box.clampPoint(agent.position, new THREE.Vector3());
+            const push = agent.position.clone().sub(closest);
             const dist = push.length();
             push.normalize();
-            
+
             // push agent outwards
             const penetration = agent.radius - dist;
             agent.position.add(push.multiplyScalar(penetration));

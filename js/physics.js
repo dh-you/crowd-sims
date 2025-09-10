@@ -4,8 +4,8 @@ import * as THREE from 'three';
 export function timeToCollision(agent, neighbor) {
     const r = agent.radius + neighbor.radius;
     const w = new THREE.Vector3(neighbor.position.x - agent.position.x, 0, neighbor.position.z - agent.position.z);
-    
-    const c =  w.dot(w) - r * r;
+
+    const c = w.dot(w) - r * r;
     if (c < 0) { return 0; }
 
     const v = new THREE.Vector3(agent.velocity.x - neighbor.velocity.x, 0, agent.velocity.z - neighbor.velocity.z);
@@ -55,7 +55,7 @@ export function updateAgents(agent, agents, timestep) {
     let fxSidestep = 0;
     let fzSidestep = 0;
 
-    agents.forEach(function(neighbor) {
+    agents.forEach(function (neighbor) {
         if (neighbor.id != agent.id) {
             const t = timeToCollision(agent, neighbor);
 
@@ -67,9 +67,9 @@ export function updateAgents(agent, agents, timestep) {
             ).normalize();
 
             // global left and right directions, 90 deg rotation from up vector
-            const left = dir.clone().applyAxisAngle(new THREE.Vector3(0,1,0), Math.PI / 2);
-            const right = dir.clone().applyAxisAngle(new THREE.Vector3(0,1,0), -Math.PI / 2);
-            
+            const left = dir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
+            const right = dir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI / 2);
+
             // is neighbor going left or right
             const leftDot = left.dot(neighbor.velocity);
             const rightDot = right.dot(neighbor.velocity);

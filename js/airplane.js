@@ -26,13 +26,53 @@ let orders = [];
 let aisle = [];
 let rowNum;
 
+let pauseButton = document.getElementById("pause");
+pauseButton.addEventListener("click", pauseButtonLogic);
+
+let downloadButton = document.getElementById("download");
+downloadButton.addEventListener("click", downloadButtonLogic);
+
 const agentMat = new THREE.MeshLambertMaterial({
     color: 0x00ff00
 });
 
-const { renderer, scene, camera } = createScene();
+const { renderer, scene, camera, world } = createScene();
 init();
-render();
+
+function pauseButtonLogic() {
+    console.log("pause");
+    world.pause = !world.pause;
+    if (!world.pause) {
+        pauseButton.src = "../resources/icons/8666604_pause_icon.png";
+    } else {
+        pauseButton.src = "../resources/icons/8666634_play_icon.png";
+    }
+}
+
+function parsePositions() {
+    let result = "";
+    for (let i = 1; i <= world.frame; i++) {
+        let curData = world.positions[i];
+        let keys = Object.keys(curData);
+        keys.forEach((k, idx) => {
+            let curAgent = curData[k];
+            result += curAgent.x.toFixed(4) + "," + curAgent.z.toFixed(4);
+            result += (idx < keys.length - 1) ? "," : "\n";
+        });
+    }
+    return result;
+}
+
+function downloadButtonLogic() {
+    console.log("download");
+    if (Object.keys(world.positions).length > 0) {
+        let textFile = parsePositions();
+        let a = document.createElement('a');
+        a.href = "data:application/octet-stream," + encodeURIComponent(textFile);
+        a.download = 'trajectories.txt';
+        a.click();
+    }
+}
 
 function shuffle(rowNum, left) {
     const row = left ? leftRows[rowNum] : rightRows[rowNum];
@@ -63,7 +103,7 @@ function init() {
     const geometry1 = new THREE.PlaneGeometry(100, 28);
     const plane1 = new THREE.Mesh(geometry1, floorMaterial);
     plane1.castShadow = true;
-    plane1.receiveShadow = true;    
+    plane1.receiveShadow = true;
     plane1.rotation.set(Math.PI / 2, 0, Math.PI / 2);
     plane1.position.set(0, UTILS.EPSILON, 0);
     scene.add(plane1);
@@ -88,23 +128,23 @@ function init() {
             agents.push(new Agent(
                 --CONFIG.COUNT,
                 j, 2, i,
-                0, 0, 1, 
+                0, 0, 1,
                 0, 0, 0,
                 j, 2, i,
-                CONFIG.RADIUS, maxSpeed, CONFIG.MAXFORCE, horizon, 
-                k, CONFIG.AVOID, CONFIG.SIDESTEP,                  
+                CONFIG.RADIUS, maxSpeed, CONFIG.MAXFORCE, horizon,
+                k, CONFIG.AVOID, CONFIG.SIDESTEP,
             ));
-            row.push(agents[agents.length-1]);
-        } 
+            row.push(agents[agents.length - 1]);
+        }
         leftRows.push(row.splice(0, 3));
         rightRows.push(row.splice(0, 3));
         // random order for left row and right row exiting
         orders.push([true, true, true, false, false, false].sort(() => Math.random() - 0.5));
         aisle.push(null);
     }
-    rowNum = aisle.length-1;
+    rowNum = aisle.length - 1;
 
-    agents.forEach(function(member) {
+    agents.forEach(function (member) {
         const agentGeometry = new THREE.CylinderGeometry(member.radius, 1, 4, 16);
         const agentMaterial = new THREE.MeshLambertMaterial({
             color: 0x00ff00
@@ -117,10 +157,6 @@ function init() {
     });
 }
 
-function render() {
-    renderer.render(scene, camera);
-}
-
 for (let i = 0; i < aisle.length; i++) {
     const left = orders[i].pop();
     shuffle(i, left);
@@ -129,61 +165,67 @@ for (let i = 0; i < aisle.length; i++) {
 function animate() {
     requestAnimationFrame(animate);
 
-    if (rowNum >= 0) {
-        let agentInAisle = aisle[rowNum];
+    if (!world.pause) {
+        if (rowNum >= 0) {
+            let agentInAisle = aisle[rowNum];
 
-        if (!agentInAisle && orders[rowNum].length > 0) {
-            // choose random agent to let out into the aisle
-            const left = orders[rowNum].pop();
-            shuffle(rowNum, left);
-        }
-
-        agentInAisle = aisle[rowNum];
-        if (agentInAisle) {
-            const reachedAisle = Math.abs(agentInAisle.position.x) < 1.5;
-
-            // do not let next agent move until agent in the aisle has left 
-            if (!reachedAisle) {
-                agentInAisle.target.x = 0;
-            } else {
-                agentInAisle.target.z = 45;
-                agentInAisle.setData("state", "EXITING");
-                aisle[rowNum] = null;
+            if (!agentInAisle && orders[rowNum].length > 0) {
+                // choose random agent to let out into the aisle
+                const left = orders[rowNum].pop();
+                shuffle(rowNum, left);
             }
-        } else if (orders[rowNum].length === 0) {
-            rowNum--; // row has finished exiting their seats
+
+            agentInAisle = aisle[rowNum];
+            if (agentInAisle) {
+                const reachedAisle = Math.abs(agentInAisle.position.x) < 1.5;
+
+                // do not let next agent move until agent in the aisle has left 
+                if (!reachedAisle) {
+                    agentInAisle.target.x = 0;
+                } else {
+                    agentInAisle.target.z = 45;
+                    agentInAisle.setData("state", "EXITING");
+                    aisle[rowNum] = null;
+                }
+            } else if (orders[rowNum].length === 0) {
+                rowNum--; // row has finished exiting their seats
+            }
         }
-    }
-    
-    agents.forEach(function(member) {
-        // navigate out of plane
-        if (member.getData("state") == "EXITING") {
-            if (member.position.z >= 44) {
-                member.target.x = 200;
-                member.setData("state", "EXITED");
-            } else if (member.position.z < 40) {
-                if (member.position.x > 2.5 - CONFIG.RADIUS) {
-                    member.position.x = 2.5 - CONFIG.RADIUS;
-                } else if (member.position.x < -2.5 + CONFIG.RADIUS) {
-                    member.position.x = -2.5 + CONFIG.RADIUS;
+
+        agents.forEach(function (member) {
+            // navigate out of plane
+            if (member.getData("state") == "EXITING") {
+                if (member.position.z >= 44) {
+                    member.target.x = 200;
+                    member.setData("state", "EXITED");
+                } else if (member.position.z < 40) {
+                    if (member.position.x > 2.5 - CONFIG.RADIUS) {
+                        member.position.x = 2.5 - CONFIG.RADIUS;
+                    } else if (member.position.x < -2.5 + CONFIG.RADIUS) {
+                        member.position.x = -2.5 + CONFIG.RADIUS;
+                    }
                 }
             }
-        }
-    });
-
-    timestep = document.getElementById("timestep").value;
-    document.getElementById("timestepValue").innerHTML = timestep;
-    agents.forEach(function(member) {
-        updateAgents(member, agents, timestep);
-    });
-
-    agents.forEach(function(agent) {
-        walls.forEach(function(wall) {
-            wall.collisionResolve(agent);
         });
-    });
 
-    agents.forEach(function(member) {
+        timestep = document.getElementById("timestep").value;
+        document.getElementById("timestepValue").innerHTML = timestep;
+        agents.forEach(function (member) {
+            updateAgents(member, agents, timestep);
+        });
+
+        agents.forEach(function (agent) {
+            walls.forEach(function (wall) {
+                wall.collisionResolve(agent);
+            });
+        });
+    }
+    world.frame++;
+    world.positions[world.frame] = {};
+
+    agents.forEach(function (member, index) {
+        world.positions[world.frame][index] = { "x": member.position.x, "z": member.position.z, "rotation": member.getData("agent").rotation.z };
+
         member.getData("agent").position.copy(member.position);
         member.getData('agent').material = agentMat;
     });
