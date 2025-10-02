@@ -7,9 +7,17 @@ class Wall:
             rect_w, rect_h = length, thickness
         else:
             rect_w, rect_h = thickness, length
-        self.rect = pygame.Rect(position.x - rect_w/2,
-                                position.y - rect_h/2,
-                                rect_w, rect_h)
+
+        # float position (center of wall)
+        self.float_pos = Vector2(position)
+
+        # rect for drawing + collisions
+        self.rect = pygame.Rect(0, 0, rect_w, rect_h)
+        self.rect.center = (int(position.x), int(position.y))
+
+    def update_center(self):
+        """Sync float_pos → rect center (for drawing & collisions)."""
+        self.rect.center = (int(self.float_pos.x), int(self.float_pos.y))
 
     def collision_resolve(self, agent):
         closest_x = max(self.rect.left, min(agent.position.x, self.rect.right))

@@ -12,13 +12,14 @@ CONFIG = {
     "MAXSPEED": 30,
     "MAXFORCE": 50,
     "HORIZON": 10,
-    "K": 2,
+    "K": 3,
     "AVOID": 15,
     "SIDESTEP": 15,
 }
 
 SCREEN_WIDTH = 600
 SCREEN_HEIGHT = 600
+TIMESTEP = 0.05
 
 pygame.init()
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -29,7 +30,6 @@ walls = []
 positions = {}
 frame = 0
 pause = False
-timestep = 0.05
 
 walls_data = [
     (300, True, Vector2(300, 150)),
@@ -70,12 +70,11 @@ while running:
                     agent.target.x = 300
                 agent.target.y = 405
             
-            # navigate agents to exit
             if agent.position.y >= 375:
                 agent.target.y = 900
 
         for agent in agents:
-            update_agent(agent, agents, timestep)
+            update_agent(agent, agents, TIMESTEP)
 
         for agent in agents:
             for wall in walls:

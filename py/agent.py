@@ -14,3 +14,10 @@ class Agent:
         self.k = k
         self.avoid = avoid
         self.sidestep = sidestep
+        self.data = {}
+
+    def setData(self, label, value):
+        self.data[label] = value
+
+    def getData(self, label):
+        return self.data.get(label, None)
