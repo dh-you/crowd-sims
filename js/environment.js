@@ -1,9 +1,18 @@
 import * as THREE from 'three';
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
-let renderer, scene, camera;
+export const LENGTH = 100;
 
-export function createScene(x, z) {
+let renderer, scene, camera;
+const world = {
+    x: LENGTH,
+    z: LENGTH,
+    pause: false,
+    frame: 0,
+    positions: {}
+};
+
+export function createScene() {
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -62,7 +71,7 @@ export function createScene(x, z) {
     const repeats = 40 / 32;
     texture.repeat.set(repeats, repeats);
 
-    const geometry = new THREE.PlaneGeometry(x, z, 10, 10);
+    const geometry = new THREE.PlaneGeometry(world.x, world.z, 10, 10);
     const material = new THREE.MeshStandardMaterial({
         map: texture,
         metalness: 0.2,
@@ -78,9 +87,9 @@ export function createScene(x, z) {
 
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     const envRT = pmremGenerator.fromScene(new THREE.Scene(), 0.04);
-    scene.environment = envRT.texture;  
+    scene.environment = envRT.texture;
 
-    return { renderer, scene, camera, controls };
+    return { renderer, scene, camera, world, controls };
 }
 
 function render() {
