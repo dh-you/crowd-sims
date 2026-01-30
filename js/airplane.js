@@ -92,12 +92,6 @@ function init() {
         [11, 4, true, new THREE.Vector3(-8.5, 2, 40)]
     ];
 
-    wallsData.forEach(([width, height, vertical, position]) => {
-        const wall = new Wall(width, height, vertical, position);
-        scene.add(wall.mesh);
-        walls.push(wall);
-    });
-
     const floorMaterial = new THREE.MeshPhongMaterial({ color: 0x222222, side: THREE.DoubleSide });
 
     const geometry1 = new THREE.PlaneGeometry(100, 28);
@@ -113,6 +107,8 @@ function init() {
     const geometry2 = new THREE.PlaneGeometry(3, 3);
     for (let i = -47; i < 37; i += 5) {
         let row = [];
+        wallsData.push([11, 4, true, new THREE.Vector3(8, 2, i+2.5)]);
+        wallsData.push([11, 4, true, new THREE.Vector3(-8, 2, i+2.5)]);
         for (const j of [12, 8, 4, -12, -8, -4]) {
             const seat = new THREE.Mesh(geometry2, seatMaterial);
             seat.castShadow = true;
@@ -154,6 +150,13 @@ function init() {
         agent.receiveShadow = true;
         scene.add(agent);
         member.setData("agent", agent);
+    });
+
+    
+    wallsData.forEach(([width, height, vertical, position]) => {
+        const wall = new Wall(width, height, vertical, position);
+        scene.add(wall.mesh);
+        walls.push(wall);
     });
 }
 

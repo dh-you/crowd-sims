@@ -24,7 +24,8 @@ const CONFIG = {
     MINCOMFORT: 10,
     MIDCOMFORT: 20,
     MAXCOMFORT: 30,
-    BLOCKED_THRESH: 1
+    BLOCKED_THRESH: 1,
+    PAINTING_RAISE: 1,
 }
 
 let viewerCounts = {};
@@ -144,22 +145,22 @@ function init() {
     let min = 5;
     let max = 10;
     const paintingsData = [
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(-50 + UTILS.EPSILON, 7.5, -33)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(-50 + UTILS.EPSILON, 7.5, -11)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(-50 + UTILS.EPSILON, 7.5, 11)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(-50 + UTILS.EPSILON, 7.5, 33)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(50 - UTILS.EPSILON, 7.5, -33)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(50 - UTILS.EPSILON, 7.5, -11)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(50 - UTILS.EPSILON, 7.5, 11)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(50 - UTILS.EPSILON, 7.5, 33)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(-33, 7.5, -50 + UTILS.EPSILON)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(-11, 7.5, -50 + UTILS.EPSILON)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(11, 7.5, -50 + UTILS.EPSILON)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(33, 7.5, -50 + UTILS.EPSILON)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(-33, 7.5, 50 - UTILS.EPSILON)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(-11, 7.5, 50 - UTILS.EPSILON)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(11, 7.5, 50 - UTILS.EPSILON)],
-        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(33, 7.5, 50 - UTILS.EPSILON)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(-50 + CONFIG.PAINTING_RAISE, 7.5, -33)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(-50 + CONFIG.PAINTING_RAISE, 7.5, -11)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(-50 + CONFIG.PAINTING_RAISE, 7.5, 11)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(-50 + CONFIG.PAINTING_RAISE, 7.5, 33)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(50 - CONFIG.PAINTING_RAISE, 7.5, -33)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(50 - CONFIG.PAINTING_RAISE, 7.5, -11)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(50 - CONFIG.PAINTING_RAISE, 7.5, 11)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), false, new THREE.Vector3(50 - CONFIG.PAINTING_RAISE, 7.5, 33)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(-33, 7.5, -50 + CONFIG.PAINTING_RAISE)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(-11, 7.5, -50 + CONFIG.PAINTING_RAISE)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(11, 7.5, -50 + CONFIG.PAINTING_RAISE)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(33, 7.5, -50 + CONFIG.PAINTING_RAISE)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(-33, 7.5, 50 - CONFIG.PAINTING_RAISE)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(-11, 7.5, 50 - CONFIG.PAINTING_RAISE)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(11, 7.5, 50 - CONFIG.PAINTING_RAISE)],
+        [THREE.MathUtils.randFloat(min, max), THREE.MathUtils.randFloat(min, max), true, new THREE.Vector3(33, 7.5, 50 - CONFIG.PAINTING_RAISE)],
     ]
 
     paintingsData.forEach(([width, height, vertical, position]) => {

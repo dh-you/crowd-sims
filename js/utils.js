@@ -8,8 +8,9 @@ export function getVelocity(maxSpeed) {
 }
 
 export function getPosition(minX, maxX, minZ, maxZ) {
-    const x = Math.random() * (maxX - minX) + minX;
-    const z = Math.random() * (maxZ - minZ) + minZ;
+    return [range(minX, maxX), range(minZ, maxZ)];
+}
 
-    return [x, z];
+export function range(mn, mx) {
+    return Math.random() * (mx - mn) + mn;
 }

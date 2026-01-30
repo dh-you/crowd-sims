@@ -5,7 +5,7 @@ import * as UTILS from './utils.js'
 import * as THREE from 'three';
 
 let agents = [];
-let timestep;
+let timestep = 0.005;
 
 const CONFIG = {
     COUNT: 50,
@@ -18,17 +18,16 @@ const CONFIG = {
     MINCOMFORT: 10,
     MAXCOMFORT: 25,
     MAXFORCE: 50,
+    TRANSITIONCAP: 2,
     wAgent: 30,
     wPerformer: 80
 }
 
 let performer = new THREE.Vector3(0, 2, 45);
 let points;
+let inTransition = 0;
 
 let pickableObjects = [];
-let selected = null;
-let mouse = new THREE.Vector2();
-const raycaster = new THREE.Raycaster();
 
 let pauseButton = document.getElementById("pause");
 pauseButton.addEventListener("click", pauseButtonLogic);
@@ -122,6 +121,8 @@ function init() {
             CONFIG.K, CONFIG.AVOID, CONFIG.SIDESTEP,
         ));
         agents[i].setData("state", "WALKING");
+        agents[i].setData("walking_timer", Math.random() * 10 + 5);
+        console.log(agents[i].getData("walking_timer"));
 
         const agent = new THREE.Mesh(agentGeometry, pedestrianMat);
         agent.castShadow = true;
@@ -153,30 +154,85 @@ function init() {
         const d = p.distanceTo(performer);
         return d > CONFIG.MINCOMFORT && d < CONFIG.MAXCOMFORT;
     });
-
-    window.addEventListener("mousedown", mouseDown, false);
-}
-
-function mouseDown(event) {
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-    raycaster.setFromCamera(mouse, camera);
-    selected = null;
-    const intersects = raycaster.intersectObjects(pickableObjects, false);
-    for (let i = 0; i < intersects.length; i++) {
-        selected = intersects[i].object.userData.id;
-    }
 }
 
 function render() {
     renderer.render(scene, camera);
 }
 
-function animate() {
+let prev = 0;
+let timer = 0;
+
+function animate(timestamp = 0) {
     requestAnimationFrame(animate);
 
     if (!world.pause) {
+        const delta = (timestamp - prev) / 1000;
+        prev = timestamp;
+
+        timer += delta;
+
         agents.forEach(function (member) {
+            switch (member.getData("state")) {
+                case "VIEWING":
+                    // subtract viewing time          
+                    member.setData("viewing_timer", member.getData("viewing_timer") - (delta * timestep / 0.005));
+
+                    if (member.getData("viewing_timer") <= 0 && inTransition < CONFIG.TRANSITIONCAP) {
+                        inTransition++;
+                        // move to the road
+                        member.target.setComponent(2, UTILS.range(-15, 15));
+                        member.setData("state", "EXITING");
+                    } else if (member.getData("viewing_timer") <= 0 && inTransition >= CONFIG.TRANSITIONCAP) {
+                        member.setData("viewing_timer", Math.random() * 10 + 5);
+                    }
+                    break;
+
+                case "EXITING":
+                    // once on the road, set target to walk to edge
+                    if (member.position.distanceTo(member.target) < 5) {
+                        member.horizon = CONFIG.HORIZON;
+                        points.push(member.getData("viewingPosition"));
+                        member.target.setComponent(0, 50 * (Math.random() < 0.5 ? -1 : 1));
+                        member.setData("state", "WALKING");
+                        member.setData("walking_timer", Math.random() * 10 + 5);
+                        inTransition--;
+                    }
+                    break;
+
+                case "WALKING":
+                    // subtract walking time          
+                    member.setData("walking_timer", member.getData("walking_timer") - (delta * timestep / 0.005));
+                    // when walking timer expires and not too many transitioning, join the crowd
+                    if (member.getData("walking_timer") <= 0 && inTransition < CONFIG.TRANSITIONCAP) {
+                        inTransition++;
+                        const viewingPos = generateViewingPosition(member);
+                        member.setData("viewingPosition", viewingPos);
+                        member.target = viewingPos.clone();
+                        member.setData("state", "JOINING");
+                    } else if (member.getData("walking_timer") <= 0 && inTransition >= CONFIG.TRANSITIONCAP) {
+                        member.setData("walking_timer", Math.random() * 10 + 5);
+                    }
+                    break;
+
+                case "JOINING":
+                    member.horizon = 1;
+
+                    // set new timer for viewer once viewing position is reached
+                    if (member.position.distanceTo(member.getData("viewingPosition")) < 5) {
+                        member.setData("viewing_timer", Math.random() * 10 + 5);
+                        member.setData("state", "VIEWING");
+                        inTransition--;
+                    }
+                    break;
+            }
+        });
+
+        timestep = document.getElementById("timestep").value;
+        document.getElementById("timestepValue").innerHTML = timestep;
+        agents.forEach(function (member) {
+            updateAgents(member, agents, timestep);
+
             // wrap around
             if (member.position.x < -LENGTH / 2 + CONFIG.RADIUS) {
                 member.position.x = LENGTH / 2 - CONFIG.RADIUS;
@@ -185,23 +241,6 @@ function animate() {
                 member.position.x = -LENGTH / 2 + CONFIG.RADIUS;
                 member.position.z *= -1;
             }
-
-            // navigate agent towards viewing position
-            if (selected != null && member.id == selected && member.getData("state") == "WALKING") {
-                member.setData("state", "VIEWING");
-                member.target = generateViewingPosition(member);
-            }
-
-            // lower agent horizon once in onlooker crowd
-            if (member.getData("state") == "VIEWING" && member.position.z > 20) {
-                member.horizon = 1;
-            }
-        });
-
-        timestep = document.getElementById("timestep").value;
-        document.getElementById("timestepValue").innerHTML = timestep;
-        agents.forEach(function (member) {
-            updateAgents(member, agents, timestep);
         });
     }
     world.frame++;
@@ -211,7 +250,6 @@ function animate() {
         world.positions[world.frame][index] = { "x": member.position.x, "z": member.position.z, "rotation": member.getData("agent").rotation.z };
 
         member.getData("agent").position.copy(member.position);
-        member.getData("agent").material = member.getData("state") == "VIEWING" ? onlookerMat : pedestrianMat;
     });
 
     renderer.render(scene, camera);
