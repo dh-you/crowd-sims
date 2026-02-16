@@ -20,7 +20,8 @@ const CONFIG = {
     MAXFORCE: 50,
     TRANSITIONCAP: 2,
     wAgent: 30,
-    wPerformer: 80
+    wPerformer: 80,
+    WATCH_PERCENT: 0.4 // 40% of agents will stop to watch the performer
 }
 
 let performer = new THREE.Vector3(0, 2, 45);
@@ -122,9 +123,11 @@ function init() {
         ));
         agents[i].setData("state", "WALKING");
         agents[i].setData("walking_timer", Math.random() * 10 + 5);
+        agents[i].setData("interested", Math.random() < CONFIG.WATCH_PERCENT);
         console.log(agents[i].getData("walking_timer"));
 
-        const agent = new THREE.Mesh(agentGeometry, pedestrianMat);
+        const mat = agents[i].getData("interested") ? onlookerMat : pedestrianMat;
+        const agent = new THREE.Mesh(agentGeometry, mat);
         agent.castShadow = true;
         agent.receiveShadow = true;
         agent.userData = {
@@ -203,14 +206,15 @@ function animate(timestamp = 0) {
                 case "WALKING":
                     // subtract walking time          
                     member.setData("walking_timer", member.getData("walking_timer") - (delta * timestep / 0.005));
-                    // when walking timer expires and not too many transitioning, join the crowd
-                    if (member.getData("walking_timer") <= 0 && inTransition < CONFIG.TRANSITIONCAP) {
+                    // when walking timer expires, only interested agents join the crowd
+                    if (member.getData("walking_timer") <= 0 && member.getData("interested") && inTransition < CONFIG.TRANSITIONCAP) {
                         inTransition++;
                         const viewingPos = generateViewingPosition(member);
                         member.setData("viewingPosition", viewingPos);
                         member.target = viewingPos.clone();
                         member.setData("state", "JOINING");
-                    } else if (member.getData("walking_timer") <= 0 && inTransition >= CONFIG.TRANSITIONCAP) {
+                    } else if (member.getData("walking_timer") <= 0) {
+                        // not interested or too many transitioning — just keep walking
                         member.setData("walking_timer", Math.random() * 10 + 5);
                     }
                     break;
