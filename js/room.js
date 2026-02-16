@@ -30,7 +30,7 @@ const agentMat = new THREE.MeshLambertMaterial({
     color: 0x00ff00
 });
 
-const { renderer, scene, camera, world } = createScene();
+const { renderer, scene, camera, world } = createScene("OIP.jpg");
 init();
 
 function pauseButtonLogic() {

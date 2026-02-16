@@ -40,7 +40,7 @@ const group2Mat = new THREE.MeshLambertMaterial({
     color: 0xff0000
 });
 
-const { renderer, scene, camera, world } = createScene();
+const { renderer, scene, camera, world } = createScene("OIP.jpg");
 init();
 
 function pauseButtonLogic() {

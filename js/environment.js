@@ -12,7 +12,7 @@ const world = {
     positions: {}
 };
 
-export function createScene() {
+export function createScene(map) {
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -62,14 +62,10 @@ export function createScene() {
     scene.add(fillLight);
 
     const loader = new THREE.TextureLoader();
-    const texture = loader.load('../resources/OIP.jpg');
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.magFilter = THREE.NearestFilter;
+    const texture = loader.load('../resources/' + map);
+    texture.magFilter = THREE.LinearFilter;
     texture.encoding = THREE.sRGBEncoding;
     texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-    const repeats = 40 / 32;
-    texture.repeat.set(repeats, repeats);
 
     const geometry = new THREE.PlaneGeometry(world.x, world.z, 10, 10);
     const material = new THREE.MeshStandardMaterial({

@@ -48,7 +48,7 @@ const performerMat = new THREE.MeshLambertMaterial({
 
 const agentGeometry = new THREE.CylinderGeometry(CONFIG.RADIUS, 1, 4, 16);
 
-const { renderer, scene, camera, world } = createScene();
+const { renderer, scene, camera, world } = createScene("OIP.jpg");
 init();
 render();
 
