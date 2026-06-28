@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Behavioral-Cloning Replay</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: system-ui, sans-serif;
+    }
+
+    body {
+      display: grid;
+      min-height: 100vh;
+      margin: 0;
+      place-items: center;
+      background: #111;
+    }
+
+    main {
+      width: min(92vw, 760px);
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    button,
+    select,
+    input {
+      font: inherit;
+    }
+
+    #timeline {
+      flex: 1;
+      min-width: 180px;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      border: 1px solid #555;
+      background: #1e1e1e;
+    }
+
+    #status {
+      min-height: 1.5rem;
+      color: #bbb;
+    }
+  </style>
+  <script type="module" src="../js/replay.js"></script>
+</head>
+<body>
+  <main>
+    <div class="controls">
+      <label>
+        Scene
+        <select id="scene"></select>
+      </label>
+      <label>
+        Agents
+        <select id="count"></select>
+      </label>
+      <button id="play" type="button">Pause</button>
+      <button id="restart" type="button">Restart</button>
+      <label>
+        Speed
+        <select id="speed">
+          <option value="0.5">0.5x</option>
+          <option value="1" selected>1x</option>
+          <option value="2">2x</option>
+          <option value="4">4x</option>
+        </select>
+      </label>
+      <input id="timeline" type="range" min="0" max="0" value="0" aria-label="Replay frame">
+    </div>
+    <canvas id="simulation" width="600" height="600"></canvas>
+    <p id="status">Loading replay…</p>
+  </main>
+</body>
+</html>

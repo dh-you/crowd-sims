@@ -1,8 +1,6 @@
-# https://gist.github.com/HaiyangXu/ec88cbdce3cdbac7b8d5
-#Use to create local host
+"""Serve the browser simulations from the repository root."""
 
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
-import socketserver
 
 PORT = 1337
 
@@ -13,9 +11,9 @@ Handler.extensions_map.update({
         '.html': 'text/html',
         '.png': 'image/png',
         '.jpg': 'image/jpg',
-        '.svg':	'image/svg+xml',
-        '.css':	'text/css',
-        '.js':'application/x-javascript',
+        '.svg': 'image/svg+xml',
+        '.css': 'text/css',
+        '.js': 'application/javascript',
         '.wasm': 'application/wasm',
         '.json': 'application/json',
         '.xml': 'application/xml',
@@ -32,18 +30,4 @@ if __name__ == "__main__":
         print("Server starting on http://localhost:1337/")
         run()
     except KeyboardInterrupt:
-        exit(0)
-
-"""
-import socketserver
-
-httpd = socketserver.TCPServer(("", PORT), Handler)
-
-try:
-    print(f"serving at http://localhost:{PORT}")
-    httpd.serve_forever()
-except KeyboardInterrupt:
-    httpd.shutdown()
-    exit(0)
-
-"""
+        print("\nServer stopped.")

@@ -1,0 +1,4 @@
+numpy
+poisson-disc
+pygame
+torch

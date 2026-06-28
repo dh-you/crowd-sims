@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "replays": [
+    {
+      "scene": "airplane",
+      "count": 24,
+      "file": "airplane-24.json",
+      "frames": 4637
+    },
+    {
+      "scene": "airplane",
+      "count": 60,
+      "file": "airplane-60.json",
+      "frames": 9786
+    },
+    {
+      "scene": "airplane",
+      "count": 102,
+      "file": "airplane-102.json",
+      "frames": 14820
+    },
+    {
+      "scene": "queue",
+      "count": 3,
+      "file": "queue-3.json",
+      "frames": 258
+    },
+    {
+      "scene": "queue",
+      "count": 5,
+      "file": "queue-5.json",
+      "frames": 442
+    },
+    {
+      "scene": "queue",
+      "count": 10,
+      "file": "queue-10.json",
+      "frames": 922
+    }
+  ]
+}
