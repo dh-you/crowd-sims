@@ -59,9 +59,24 @@ Generated datasets, normalization statistics, and model weights are stored in
 Useful options:
 
 ```powershell
-python imitation\collect_data.py --scene queue --frames 5500
+python imitation\collect_data.py --scene queue --episodes 8
 python imitation\train_bc.py --scene queue --epochs 100 --hidden 64
 python imitation\inference.py --scene queue --alpha 0.7 --count 10
+```
+
+Airplane training uses a gated candidate workflow. It collects complete,
+phase-labelled expert episodes without changing the policy's five inputs,
+trains three seeds, checks seat-row motion across multiple crowd sizes and
+random seeds, and promotes the artifacts only when every check passes:
+
+```powershell
+python imitation\retrain_airplane.py
+```
+
+For a quicker smoke run, reduce the episode, epoch, and evaluation-seed counts:
+
+```powershell
+python imitation\retrain_airplane.py --episodes 2 --epochs 10 --evaluation-seeds 1
 ```
 
 ### Web replays

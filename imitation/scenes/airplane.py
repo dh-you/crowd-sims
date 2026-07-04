@@ -24,6 +24,11 @@ CONFIG = {
 SCREEN_WIDTH = 600
 SCREEN_HEIGHT = 600
 TIMESTEP = 0.05
+TRAINING_EPISODE_CAP = 12000
+
+PHASE_WAITING = 0
+PHASE_TO_AISLE = 1
+PHASE_EXITING = 2
 
 # ── IL interface ──────────────────────────────────────────────────────────────
 STATE_DIM = 5
@@ -102,6 +107,37 @@ def extract_action(agent):
 def filter_agent(agent):
     return getattr(agent, "state", None) != "EXITED"
 
+def training_phase(agent):
+    """Return auxiliary supervision metadata; this is never a policy input."""
+    return {
+        "WAITING": PHASE_WAITING,
+        "TO_AISLE": PHASE_TO_AISLE,
+        "EXITING": PHASE_EXITING,
+    }.get(getattr(agent, "state", None), PHASE_WAITING)
+
+def perturb_for_training(agent, rng):
+    """Apply covariate-shift noise without teaching motion through seat rows."""
+    phase = training_phase(agent)
+    if phase == PHASE_WAITING:
+        return
+    agent.position.x += rng.uniform(-2, 2)
+    if phase == PHASE_EXITING:
+        agent.position.y += rng.uniform(-2, 2)
+
+def expert_should_move(agent):
+    return training_phase(agent) != PHASE_WAITING
+
+def clean_expert_motion(agent):
+    """Make expert labels obey the airplane's seat-row geometry."""
+    start = agent.getData("start_pos")
+    phase = training_phase(agent)
+    if phase == PHASE_WAITING:
+        agent.position.update(start)
+        agent.velocity.update(0, 0)
+    elif phase == PHASE_TO_AISLE:
+        agent.position.y = start.y
+        agent.velocity.y = 0.0
+
 # ── Scene Logic ───────────────────────────────────────────────────────────────
 
 def _to_pygame(pos3):
@@ -122,7 +158,8 @@ def build_walls():
 def _shuffle_row(leftRows, rightRows, aisle, rowNum, left):
     row = leftRows[rowNum] if left else rightRows[rowNum]
     nextAgent = row.pop() if row else None
-    if nextAgent: aisle[rowNum] = nextAgent
+    if nextAgent:
+        aisle[rowNum] = nextAgent
 
 def build_agents(count=None):
     if count is None:
@@ -159,6 +196,7 @@ def build_agents(count=None):
             )
 
             agent.setData("start_pos", Vector2(start_pos.x, start_pos.y))
+            agent.state = "WAITING"
             agents.append(agent)
 
             # IMPORTANT:
@@ -212,6 +250,7 @@ class SceneController:
                     agentInAisle.state = "EXITING"
                     self.aisle[self.rowNum] = None
                 else:
+                    agentInAisle.state = "TO_AISLE"
                     agentInAisle.target.x = _AISLE_X
             elif not self.orders[self.rowNum]:
                 self.rowNum -= 1
