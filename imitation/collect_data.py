@@ -11,8 +11,12 @@ Each scene module must export:
     extract_state(agent, agents) -> np.ndarray
     extract_action(agent)        -> np.ndarray
     filter_agent(agent)          -> bool
-    build_walls(), build_agents(), SceneController, TIMESTEP,
+    build_walls(), build_agents(), TIMESTEP,
     SCREEN_WIDTH, SCREEN_HEIGHT
+
+Scenes may optionally export:
+    SceneController or build_controller(agents, meta)
+    expert_action(state) for direct-velocity demonstrations
 """
 
 import random
@@ -24,7 +28,7 @@ import argparse
 import importlib
 import numpy as np
 import pygame
-from core.physics import update_agent
+from core.physics import advance_velocity_agents, update_agent
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--scene", required=True, help="Scene name (e.g. airplane, queue)")
@@ -61,6 +65,7 @@ states_list = []
 actions_list = []
 episode_ids_list = []
 phases_list = []
+collect_phases = hasattr(scene, "training_phase")
 frame = 0
 episode = 0
 running = True
@@ -75,7 +80,17 @@ while running and episode < args.episodes and (args.frames <= 0 or frame < args.
     episode += 1
     walls = scene.build_walls()
     agents, meta = scene.build_agents()
-    controller = scene.SceneController(agents, meta)
+    initialize_episode = getattr(scene, "initialize_training_episode", None)
+    if initialize_episode is not None:
+        initialize_episode(agents, random)
+    controller_factory = getattr(scene, "build_controller", None)
+    controller_class = getattr(scene, "SceneController", None)
+    if controller_factory is not None:
+        controller = controller_factory(agents, meta)
+    elif controller_class is not None:
+        controller = controller_class(agents, meta)
+    else:
+        controller = None
 
     episode_frame = 0
     episode_states = []
@@ -103,7 +118,8 @@ while running and episode < args.episodes and (args.frames <= 0 or frame < args.
                     agent.position.x += random.uniform(-2, 2)
                     agent.position.y += random.uniform(-2, 2)
 
-        controller.update(agents)
+        if controller is not None:
+            controller.update(agents)
 
         # Capture state BEFORE physics — this matches inference, where
         # extract_state is called before the agent moves. Capturing after
@@ -112,30 +128,44 @@ while running and episode < args.episodes and (args.frames <= 0 or frame < args.
             agent.id: scene.extract_state(agent, agents)
             for agent in agents if scene.filter_agent(agent)
         }
-        pre_phases = {
-            agent.id: scene.training_phase(agent)
-            if hasattr(scene, "training_phase") else -1
-            for agent in agents if scene.filter_agent(agent)
-        }
+        pre_phases = (
+            {
+                agent.id: scene.training_phase(agent)
+                for agent in agents if scene.filter_agent(agent)
+            }
+            if collect_phases else {}
+        )
 
-        for agent in agents:
-            should_move = getattr(scene, "expert_should_move", None)
-            if should_move is None or should_move(agent):
-                update_agent(agent, agents, scene.TIMESTEP)
-            clean_motion = getattr(scene, "clean_expert_motion", None)
-            if clean_motion is not None:
-                clean_motion(agent)
-        for agent in agents:
-            for wall in walls:
-                wall.collision_resolve(agent)
+        direct_expert = getattr(scene, "expert_action", None)
+        if direct_expert is not None:
+            active_agents = [agent for agent in agents if agent.id in pre_states]
+            actions = [direct_expert(pre_states[agent.id]) for agent in active_agents]
+            advance_velocity_agents(
+                active_agents,
+                actions,
+                walls,
+                scene.TIMESTEP,
+            )
+        else:
+            for agent in agents:
+                should_move = getattr(scene, "expert_should_move", None)
+                if should_move is None or should_move(agent):
+                    update_agent(agent, agents, scene.TIMESTEP)
+                clean_motion = getattr(scene, "clean_expert_motion", None)
+                if clean_motion is not None:
+                    clean_motion(agent)
+            for agent in agents:
+                for wall in walls:
+                    wall.collision_resolve(agent)
 
         # Log samples BEFORE despawning, so a state captured this frame always
         # has its matching action recorded.
         for agent in agents:
-            if scene.filter_agent(agent) and agent.id in pre_states:
+            if agent.id in pre_states:
                 episode_states.append(pre_states[agent.id])
                 episode_actions.append(scene.extract_action(agent))
-                episode_phases.append(pre_phases[agent.id])
+                if collect_phases:
+                    episode_phases.append(pre_phases[agent.id])
 
         # Drop dead agents from the active list. Using filter_agent (the
         # scene's own "is this agent still in play?" predicate) instead of
@@ -167,7 +197,8 @@ while running and episode < args.episodes and (args.frames <= 0 or frame < args.
     if complete:
         states_list.extend(episode_states)
         actions_list.extend(episode_actions)
-        phases_list.extend(episode_phases)
+        if collect_phases:
+            phases_list.extend(episode_phases)
         episode_ids_list.extend([episode - 1] * len(episode_states))
     ep_samples = len(episode_states)
     print(f"Episode {episode} ended after {episode_frame} frames "
@@ -187,11 +218,12 @@ if not states_list:
 
 filename = "expert_data.candidate.npz" if args.candidate else "expert_data.npz"
 out_path = os.path.join(DATA_DIR, filename)
-np.savez(
-    out_path,
+payload = dict(
     states=np.array(states_list, dtype=np.float32),
     actions=np.array(actions_list, dtype=np.float32),
     episode_ids=np.array(episode_ids_list, dtype=np.int32),
-    phases=np.array(phases_list, dtype=np.int8),
 )
+if collect_phases:
+    payload["phases"] = np.array(phases_list, dtype=np.int8)
+np.savez(out_path, **payload)
 print(f"\nDone. {episode} complete episodes, {len(states_list)} samples -> {out_path}")

@@ -1,4 +1,5 @@
 import argparse
+import importlib
 import os
 
 import numpy as np
@@ -12,32 +13,32 @@ PHASE_TO_AISLE = 1
 
 
 class CrowdDataset(Dataset):
-    def __init__(self, states, actions, phases):
+    def __init__(self, states, actions, groups):
         self.states = torch.as_tensor(states, dtype=torch.float32)
         self.actions = torch.as_tensor(actions, dtype=torch.float32)
-        self.phases = torch.as_tensor(phases, dtype=torch.int64)
+        self.groups = torch.as_tensor(groups, dtype=torch.int64)
 
     def __len__(self):
         return len(self.states)
 
     def __getitem__(self, idx):
-        return self.states[idx], self.actions[idx], self.phases[idx]
+        return self.states[idx], self.actions[idx], self.groups[idx]
 
 
 class BCPolicy(nn.Module):
-    """The existing 5-input, tanh-bounded behavioral-cloning policy."""
+    """A tanh-bounded MLP with scene-configurable hidden dimensions."""
 
-    def __init__(self, state_dim, action_dim, hidden_dim):
+    def __init__(self, state_dim, action_dim, hidden_dims):
         super().__init__()
-        self.trunk = nn.Sequential(
-            nn.Linear(state_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, action_dim),
-        )
+        if isinstance(hidden_dims, int):
+            hidden_dims = (hidden_dims, hidden_dims, hidden_dims)
+        layers = []
+        input_dim = state_dim
+        for hidden_dim in hidden_dims:
+            layers.extend((nn.Linear(input_dim, hidden_dim), nn.ReLU()))
+            input_dim = hidden_dim
+        layers.append(nn.Linear(input_dim, action_dim))
+        self.trunk = nn.Sequential(*layers)
 
     def forward(self, x):
         return torch.tanh(self.trunk(x))
@@ -83,6 +84,18 @@ def balance_phase_indices(indices, phases, samples_per_phase, seed):
     return result
 
 
+def action_regime_labels(actions):
+    """Classify demonstrations as stationary, lateral, or forward."""
+    speeds = np.linalg.norm(actions, axis=1)
+    groups = np.zeros(len(actions), dtype=np.int8)
+    moving = speeds >= 0.5
+    lateral = moving & (np.abs(actions[:, 0]) >= np.abs(actions[:, 1]))
+    forward = moving & ~lateral
+    groups[lateral] = 1
+    groups[forward] = 2
+    return groups
+
+
 def elementwise_loss(prediction, target, loss_name):
     if loss_name == "huber":
         return nn.functional.smooth_l1_loss(prediction, target, reduction="none")
@@ -95,9 +108,25 @@ def phase_weighted_loss(
     phases,
     loss_name,
     waiting_weight,
+    motion_weight,
     aisle_vertical_weight,
+    use_phase_weights,
+    use_action_weights,
 ):
     losses = elementwise_loss(prediction, target, loss_name)
+    if use_action_weights:
+        weights = torch.ones_like(losses)
+        stationary = phases == 0
+        lateral = phases == 1
+        forward = phases == 2
+        weights[stationary] *= waiting_weight
+        weights[lateral, 0] *= motion_weight
+        weights[lateral, 1] *= aisle_vertical_weight
+        weights[forward, 0] *= aisle_vertical_weight
+        weights[forward, 1] *= motion_weight
+        return (losses * weights).sum() / weights.sum()
+    if not use_phase_weights:
+        return losses.mean()
     weights = torch.ones_like(losses)
     waiting = phases == PHASE_WAITING
     to_aisle = phases == PHASE_TO_AISLE
@@ -106,7 +135,14 @@ def phase_weighted_loss(
     return (losses * weights).sum() / weights.sum()
 
 
-def validation_metrics(model, loader, device, args):
+def validation_metrics(
+    model,
+    loader,
+    device,
+    args,
+    use_phase_weights,
+    use_action_weights,
+):
     model.eval()
     weighted_total = 0.0
     sample_total = 0
@@ -123,14 +159,18 @@ def validation_metrics(model, loader, device, args):
                 phases,
                 args.loss,
                 args.waiting_weight,
+                args.motion_weight,
                 args.aisle_vertical_weight,
+                use_phase_weights,
+                use_action_weights,
             )
             weighted_total += loss.item() * len(states)
             sample_total += len(states)
-            for phase in phase_predictions:
-                mask = phases == phase
-                if mask.any():
-                    phase_predictions[phase].append(predictions[mask].cpu())
+            if use_phase_weights:
+                for phase in phase_predictions:
+                    mask = phases == phase
+                    if mask.any():
+                        phase_predictions[phase].append(predictions[mask].cpu())
 
     metrics = {"loss": weighted_total / sample_total}
     waiting_predictions = phase_predictions[PHASE_WAITING]
@@ -147,7 +187,8 @@ def validation_metrics(model, loader, device, args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--scene", required=True)
-    parser.add_argument("--hidden", type=int, default=64)
+    parser.add_argument("--hidden", type=int, default=None,
+                        help="Override every scene-configured hidden width.")
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--batch", type=int, default=2048)
@@ -157,12 +198,22 @@ def main():
     parser.add_argument("--validation_fraction", type=float, default=0.2)
     parser.add_argument("--samples_per_phase", type=int, default=30000)
     parser.add_argument("--validation_samples_per_phase", type=int, default=20000)
-    parser.add_argument("--waiting_weight", type=float, default=5.0)
+    parser.add_argument("--waiting_weight", type=float, default=1.0)
+    parser.add_argument("--motion_weight", type=float, default=5.0)
     parser.add_argument("--aisle_vertical_weight", type=float, default=10.0)
     parser.add_argument("--patience", type=int, default=20)
     parser.add_argument("--candidate", action="store_true",
                         help="Read and write candidate artifacts for gated promotion.")
     args = parser.parse_args()
+
+    scene = importlib.import_module(f"scenes.{args.scene}")
+    configured_hidden_dims = tuple(
+        getattr(scene, "POLICY_HIDDEN_DIMS", (64, 64, 64))
+    )
+    hidden_dims = (
+        (args.hidden,) * len(configured_hidden_dims)
+        if args.hidden is not None else configured_hidden_dims
+    )
 
     data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), args.scene)
     suffix = ".candidate" if args.candidate else ""
@@ -171,7 +222,17 @@ def main():
     data = np.load(data_path)
     states = data["states"]
     actions = data["actions"]
-    phases = data["phases"] if "phases" in data else np.full(len(states), -1, dtype=np.int8)
+    has_phase_labels = "phases" in data and np.any(data["phases"] >= 0)
+    if has_phase_labels:
+        groups = data["phases"]
+    elif getattr(scene, "BALANCE_ACTION_REGIMES", False):
+        groups = action_regime_labels(actions)
+    else:
+        groups = np.full(len(states), -1, dtype=np.int8)
+    use_action_weights = (
+        not has_phase_labels
+        and getattr(scene, "BALANCE_ACTION_REGIMES", False)
+    )
     episode_ids = data["episode_ids"] if "episode_ids" in data else None
 
     train_indices, val_indices, val_episodes = split_indices(
@@ -186,8 +247,12 @@ def main():
     # Statistics come only from training episodes, preventing validation leakage.
     train_states = states[train_indices]
     train_actions = actions[train_indices]
-    state_mean = train_states.mean(axis=0)
-    state_std = train_states.std(axis=0) + 1e-8
+    if getattr(scene, "STATE_IS_NORMALIZED", False):
+        state_mean = np.zeros(states.shape[1], dtype=np.float32)
+        state_std = np.ones(states.shape[1], dtype=np.float32)
+    else:
+        state_mean = train_states.mean(axis=0)
+        state_std = train_states.std(axis=0) + 1e-8
     action_mean = np.zeros_like(train_actions[0])
     action_std = np.abs(train_actions).max(axis=0) + 1e-8
     stats = {
@@ -202,29 +267,51 @@ def main():
     states_norm = (states - state_mean) / state_std
     actions_norm = (actions - action_mean) / action_std
     balanced_train_indices = balance_phase_indices(
-        train_indices, phases, args.samples_per_phase, 42
+        train_indices, groups, args.samples_per_phase, 42
     )
     balanced_val_indices = balance_phase_indices(
-        val_indices, phases, args.validation_samples_per_phase, 43
+        val_indices, groups, args.validation_samples_per_phase, 43
     )
     phase_counts = {
-        int(phase): int(np.sum(phases[balanced_train_indices] == phase))
-        for phase in np.unique(phases[balanced_train_indices])
+        int(group): int(np.sum(groups[balanced_train_indices] == group))
+        for group in np.unique(groups[balanced_train_indices])
     }
     print(
         f"Train samples: {len(balanced_train_indices)} {phase_counts} | "
         f"validation samples: {len(balanced_val_indices)}"
     )
 
+    train_state_values = states_norm[balanced_train_indices]
+    train_action_values = actions_norm[balanced_train_indices]
+    train_group_values = groups[balanced_train_indices]
+
+    synthetic_sampler = getattr(scene, "sample_training_examples", None)
+    synthetic_per_regime = getattr(scene, "SYNTHETIC_SAMPLES_PER_REGIME", 0)
+    if synthetic_sampler is not None and synthetic_per_regime > 0:
+        synthetic_states, synthetic_actions = synthetic_sampler(
+            synthetic_per_regime,
+            np.random.default_rng(44),
+        )
+        synthetic_states = (synthetic_states - state_mean) / state_std
+        synthetic_actions = (synthetic_actions - action_mean) / action_std
+        synthetic_groups = action_regime_labels(synthetic_actions)
+        train_state_values = np.concatenate((train_state_values, synthetic_states))
+        train_action_values = np.concatenate((train_action_values, synthetic_actions))
+        train_group_values = np.concatenate((train_group_values, synthetic_groups))
+        print(
+            f"Added {len(synthetic_states)} state-only synthetic expert examples "
+            f"({synthetic_per_regime} per action regime)."
+        )
+
     train_dataset = CrowdDataset(
-        states_norm[balanced_train_indices],
-        actions_norm[balanced_train_indices],
-        phases[balanced_train_indices],
+        train_state_values,
+        train_action_values,
+        train_group_values,
     )
     val_dataset = CrowdDataset(
         states_norm[balanced_val_indices],
         actions_norm[balanced_val_indices],
-        phases[balanced_val_indices],
+        groups[balanced_val_indices],
     )
     val_loader = DataLoader(val_dataset, batch_size=args.batch * 4)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -244,7 +331,7 @@ def main():
             shuffle=True,
             generator=generator,
         )
-        model = BCPolicy(states.shape[1], actions.shape[1], args.hidden).to(device)
+        model = BCPolicy(states.shape[1], actions.shape[1], hidden_dims).to(device)
         optimizer = torch.optim.Adam(
             model.parameters(), lr=args.lr, weight_decay=args.weight_decay
         )
@@ -269,13 +356,23 @@ def main():
                     batch_phases,
                     args.loss,
                     args.waiting_weight,
+                    args.motion_weight,
                     args.aisle_vertical_weight,
+                    has_phase_labels,
+                    use_action_weights,
                 )
                 loss.backward()
                 optimizer.step()
                 train_total += loss.item() * len(batch_states)
             scheduler.step()
-            metrics = validation_metrics(model, val_loader, device, args)
+            metrics = validation_metrics(
+                model,
+                val_loader,
+                device,
+                args,
+                has_phase_labels,
+                use_action_weights,
+            )
             score = metrics["loss"]
             if score < best_seed_score:
                 best_seed_score = score
@@ -309,7 +406,7 @@ def main():
     torch.save(best_overall_state, output_path)
     print(
         f"Best seed={best_seed}, weighted validation loss={best_overall_score:.6f} "
-        f"-> {output_path}"
+        f"hidden={hidden_dims} -> {output_path}"
     )
 
 

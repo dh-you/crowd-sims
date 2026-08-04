@@ -1,14 +1,17 @@
-import sys
 import os
+import sys
+
+import numpy as np
+from pygame.math import Vector2
+
 _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _root not in sys.path:
     sys.path.insert(0, _root)
 
-from pygame.math import Vector2
 from core.agent import Agent
+from core.physics import advance_velocity_agents
 from core.wall import Wall
-import numpy as np
-import random
+
 
 CONFIG = {
     "COUNT": 102,
@@ -26,166 +29,201 @@ SCREEN_HEIGHT = 600
 TIMESTEP = 0.05
 TRAINING_EPISODE_CAP = 12000
 
-PHASE_WAITING = 0
-PHASE_TO_AISLE = 1
-PHASE_EXITING = 2
-
-# ── IL interface ──────────────────────────────────────────────────────────────
-STATE_DIM = 5
+STATE_DIM = 4
 ACTION_DIM = 2
+POLICY_HIDDEN_DIMS = (32, 32)
+POLICY_STOP_THRESHOLD = 2.5
+STATE_IS_NORMALIZED = True
+BALANCE_ACTION_REGIMES = True
+SYNTHETIC_SAMPLES_PER_REGIME = 30000
 
-_AISLE_X = 300.0
-_EXIT_Y = 420.0
-_FINAL_GOAL = Vector2(300, 600)
-_AISLE_THRESHOLD = 15.0 
-_HORIZON = 100.0
+AISLE_X = 300.0
+EXIT_Y = 420.0
+MAX_SEAT_DISTANCE = 36.0
+SENSOR_RANGE = 100.0
+AISLE_HALF_WIDTH = 6.0
+FORWARD_CORRIDOR_HALF_WIDTH = 15.0
+FORWARD_MIN_Y = 6.0
+
+AISLE_EPS = AISLE_HALF_WIDTH / MAX_SEAT_DISTANCE
+ROW_SAFE = 15.0 / SENSOR_RANGE
+FOLLOW_SAFE = 18.0 / SENSOR_RANGE
+MERGE_SAFE = 30.0 / SENSOR_RANGE
 
 
 def extract_state(agent, agents):
-    """5-D ego-centric state for the airplane de-boarding task."""
-    start = agent.getData("start_pos")
+    """Return four normalized local observations for autonomous deboarding."""
+    aisle_delta = AISLE_X - agent.position.x
+    aisle_offset = np.clip(
+        aisle_delta / MAX_SEAT_DISTANCE,
+        -1.0,
+        1.0,
+    )
 
-    # 1-2. Target Direction (unit vector; no deadzone)
-    to_target = Vector2(agent.target.x - agent.position.x,
-                        agent.target.y - agent.position.y)
-    length = to_target.length()
-    if length > 1e-6:
-        dir_x, dir_y = to_target.x / length, to_target.y / length
-    else:
-        dir_x, dir_y = 0.0, 0.0
+    start_row = agent.getData("start_row")
+    start_side = agent.getData("start_side")
+    row_clearance = SENSOR_RANGE
+    opposing_clearance = SENSOR_RANGE
+    forward_clearance = SENSOR_RANGE
 
-    # 3. Global progress: Distance to the FINAL goal in the lobby
-    dist_to_exit = agent.position.distance_to(_FINAL_GOAL)
+    direction_to_aisle = np.sign(aisle_delta)
+    distance_to_aisle = abs(aisle_delta)
 
-    # 4 & 5. Row-mate sensors
-    side_of_aisle = -1 if start.x < _AISLE_X else 1
-    agent_seat_dist = abs(start.x - _AISLE_X)
-    blocking_row_dist = _HORIZON
     for other in agents:
-        if other is agent or getattr(other, "state", None) == "EXITED": 
-            continue
-        other_start = other.getData("start_pos")
-        if other_start is None or abs(other_start.y - start.y) > 5: 
-            continue
-        if (-1 if other_start.x < _AISLE_X else 1) != side_of_aisle: 
+        if other is agent or not filter_agent(other):
             continue
 
-        if abs(other_start.x - _AISLE_X) < agent_seat_dist:
-            other_in_aisle = abs(other.position.x - _AISLE_X) < _AISLE_THRESHOLD
-            if not other_in_aisle:
-                blocking_row_dist = min(blocking_row_dist, agent.position.distance_to(other.position))
-            else:
-                # Vertical clearance: only block if they are still "in front" of our exit path
-                if (other.position.y - agent.position.y) < 12.0: 
-                    blocking_row_dist = min(blocking_row_dist, agent.position.distance_to(other.position))
+        other_row = other.getData("start_row")
+        other_side = other.getData("start_side")
+        distance = agent.position.distance_to(other.position)
 
-    # 5. Wide-Angle Aisle Clearance
-    # This sensor still checks if the aisle is clear, but we've removed 
-    # the "Glass Door" blindness because agents now despawn automatically.
-    forward_aisle_clearance = _HORIZON
-    _WIDE_AISLE = 45.0 
-    for other in agents:
-        if other is agent or getattr(other, "state", None) == "EXITED": 
-            continue
+        if other_row == start_row:
+            if other_side == start_side and direction_to_aisle != 0:
+                lateral_progress = (
+                    other.position.x - agent.position.x
+                ) * direction_to_aisle
+                if 0.0 < lateral_progress <= distance_to_aisle + other.radius:
+                    row_clearance = min(row_clearance, distance)
+            elif other_side != start_side:
+                opposing_clearance = min(opposing_clearance, distance)
 
-        if abs(other.position.x - _AISLE_X) < _WIDE_AISLE:
-            y_diff = other.position.y - agent.position.y
-            # Check if they are in front of us or slightly behind (buffer)
-            if y_diff > -15.0:
-                d = agent.position.distance_to(other.position)
-                if d < forward_aisle_clearance:
-                    forward_aisle_clearance = d
+        y_diff = other.position.y - agent.position.y
+        if (
+            other_row != start_row
+            and y_diff > FORWARD_MIN_Y
+            and abs(other.position.x - AISLE_X)
+            <= FORWARD_CORRIDOR_HALF_WIDTH
+        ):
+            forward_clearance = min(forward_clearance, distance)
 
-    return np.array([
-        dir_x, dir_y, dist_to_exit,
-        blocking_row_dist, forward_aisle_clearance,
-    ], dtype=np.float32)
+    return np.array(
+        [
+            aisle_offset,
+            min(row_clearance, SENSOR_RANGE) / SENSOR_RANGE,
+            min(opposing_clearance, SENSOR_RANGE) / SENSOR_RANGE,
+            min(forward_clearance, SENSOR_RANGE) / SENSOR_RANGE,
+        ],
+        dtype=np.float32,
+    )
+
+
+def expert_action(state):
+    """Map only the four observable values to an expert velocity."""
+    aisle_offset, row_clearance, opposing_clearance, forward_clearance = state
+
+    if abs(float(aisle_offset)) > AISLE_EPS + 1e-6:
+        blocked = (
+            row_clearance < ROW_SAFE
+            or forward_clearance < FOLLOW_SAFE
+            or (aisle_offset < 0 and opposing_clearance < MERGE_SAFE)
+        )
+        if blocked:
+            return np.zeros(ACTION_DIM, dtype=np.float32)
+        return np.array(
+            [np.sign(aisle_offset) * CONFIG["MAXSPEED"], 0.0],
+            dtype=np.float32,
+        )
+
+    if forward_clearance < FOLLOW_SAFE:
+        return np.zeros(ACTION_DIM, dtype=np.float32)
+    return np.array([0.0, CONFIG["MAXSPEED"]], dtype=np.float32)
+
+
+def sample_training_examples(samples_per_regime, rng):
+    """Sample the complete observable rule without adding hidden information."""
+    state_groups = [[], [], []]
+    action_groups = [[], [], []]
+
+    while any(len(group) < samples_per_regime for group in state_groups):
+        batch = rng.uniform(
+            low=[-1.0, 0.0, 0.0, 0.0],
+            high=[1.0, 1.0, 1.0, 1.0],
+            size=(max(4096, samples_per_regime), STATE_DIM),
+        ).astype(np.float32)
+        actions = np.asarray([expert_action(state) for state in batch])
+        speeds = np.linalg.norm(actions, axis=1)
+        labels = np.zeros(len(actions), dtype=np.int8)
+        moving = speeds >= 0.5
+        labels[moving & (np.abs(actions[:, 0]) >= np.abs(actions[:, 1]))] = 1
+        labels[moving & (np.abs(actions[:, 0]) < np.abs(actions[:, 1]))] = 2
+
+        for label in range(3):
+            needed = samples_per_regime - len(state_groups[label])
+            if needed <= 0:
+                continue
+            selected = np.flatnonzero(labels == label)[:needed]
+            state_groups[label].extend(batch[selected])
+            action_groups[label].extend(actions[selected])
+
+    states = np.asarray(
+        [state for group in state_groups for state in group],
+        dtype=np.float32,
+    )
+    actions = np.asarray(
+        [action for group in action_groups for action in group],
+        dtype=np.float32,
+    )
+    order = rng.permutation(len(states))
+    return states[order], actions[order]
+
 
 def extract_action(agent):
     return np.array([agent.velocity.x, agent.velocity.y], dtype=np.float32)
 
-def filter_agent(agent):
-    return getattr(agent, "state", None) != "EXITED"
 
-def training_phase(agent):
-    """Return auxiliary supervision metadata; this is never a policy input."""
-    return {
-        "WAITING": PHASE_WAITING,
-        "TO_AISLE": PHASE_TO_AISLE,
-        "EXITING": PHASE_EXITING,
-    }.get(getattr(agent, "state", None), PHASE_WAITING)
+def filter_agent(agent):
+    return agent.position.y < EXIT_Y
+
+
+def initialize_training_episode(agents, rng):
+    """Apply the same bounded initial perturbation used by the expert gate."""
+    for agent in agents:
+        agent.position += Vector2(rng.uniform(-1.0, 1.0), rng.uniform(-1.0, 1.0))
+
 
 def perturb_for_training(agent, rng):
-    """Apply covariate-shift noise without teaching motion through seat rows."""
-    phase = training_phase(agent)
-    if phase == PHASE_WAITING:
-        return
-    agent.position.x += rng.uniform(-2, 2)
-    if phase == PHASE_EXITING:
-        agent.position.y += rng.uniform(-2, 2)
+    """Disable legacy per-frame random walks for the local airplane expert."""
+    return None
 
-def expert_should_move(agent):
-    return training_phase(agent) != PHASE_WAITING
-
-def clean_expert_motion(agent):
-    """Make expert labels obey the airplane's seat-row geometry."""
-    start = agent.getData("start_pos")
-    phase = training_phase(agent)
-    if phase == PHASE_WAITING:
-        agent.position.update(start)
-        agent.velocity.update(0, 0)
-    elif phase == PHASE_TO_AISLE:
-        agent.position.y = start.y
-        agent.velocity.y = 0.0
-
-# ── Scene Logic ───────────────────────────────────────────────────────────────
 
 def _to_pygame(pos3):
     x, z = pos3[0], pos3[2]
     return Vector2((x + 100) * 3, (z + 100) * 3)
 
-def build_walls():
-    # Side walls and cabin dividers; the lobby remains open.
-    walls_data = [
-        (90, 4, False, Vector2(14, -5)), 
-        (90, 4, False, Vector2(-14, -5)),
-        (11, 4, True, Vector2(8.5, 40)), 
-        (11, 4, True, Vector2(-8.5, 40)),
-        (28, 4, True, Vector2(0, -50))
-    ]
-    return [Wall(width * 3, vertical, _to_pygame((pos.x, 0, pos.y))) for width, _, vertical, pos in walls_data]
 
-def _shuffle_row(leftRows, rightRows, aisle, rowNum, left):
-    row = leftRows[rowNum] if left else rightRows[rowNum]
-    nextAgent = row.pop() if row else None
-    if nextAgent:
-        aisle[rowNum] = nextAgent
+def build_walls():
+    walls_data = [
+        (90, False, Vector2(14, -5)),
+        (90, False, Vector2(-14, -5)),
+        (11, True, Vector2(8.5, 40)),
+        (11, True, Vector2(-8.5, 40)),
+        (28, True, Vector2(0, -50)),
+    ]
+    return [
+        Wall(width * 3, vertical, _to_pygame((position.x, 0, position.y)))
+        for width, vertical, position in walls_data
+    ]
+
 
 def build_agents(count=None):
     if count is None:
         count = CONFIG["COUNT"]
+    if not 0 <= count <= CONFIG["COUNT"]:
+        raise ValueError(f"count must be between 0 and {CONFIG['COUNT']}")
 
     agents = []
-    leftRows, rightRows, orders, aisle = [], [], [], []
-
-    # Full airplane layout: rows from front to back at 5-unit spacing.
     geometry_rows = list(range(-47, 37, 5))
-    seat_cols = [12, 8, 4, -12, -8, -4]
+    seat_columns = [12, 8, 4, -12, -8, -4]
 
-    agent_id = 0
+    for row_index, z in enumerate(geometry_rows):
+        for seat_column in seat_columns:
+            if len(agents) >= count:
+                return agents, {}
 
-    for i, z in enumerate(geometry_rows):
-        left_side = []
-        right_side = []
-
-        for j in seat_cols:
-            if agent_id >= count:
-                break
-
-            start_pos = _to_pygame((j, 0, z))
+            position = _to_pygame((seat_column, 0, z))
             agent = Agent(
-                agent_id,
-                start_pos,
+                len(agents),
+                position,
                 CONFIG["RADIUS"],
                 CONFIG["MAXSPEED"],
                 CONFIG["MAXFORCE"],
@@ -194,91 +232,45 @@ def build_agents(count=None):
                 CONFIG["AVOID"],
                 CONFIG["SIDESTEP"],
             )
-
-            agent.setData("start_pos", Vector2(start_pos.x, start_pos.y))
-            agent.state = "WAITING"
+            agent.setData("start_pos", Vector2(position))
+            agent.setData("start_row", row_index)
+            agent.setData("start_side", 1 if seat_column > 0 else -1)
             agents.append(agent)
 
-            # IMPORTANT:
-            # j > 0 is right side, j < 0 is left side.
-            # Lists are ordered window -> aisle, so pop() releases aisle-closest first.
-            if j > 0:
-                right_side.append(agent)   # [12, 8, 4], pop gives 4 first
-            else:
-                left_side.append(agent)    # [-12, -8, -4], pop gives -4 first
+    return agents, {}
 
-            agent_id += 1
 
-        if left_side or right_side:
-            leftRows.append(left_side)
-            rightRows.append(right_side)
-
-            # True means choose from leftRows, False means choose from rightRows
-            row_order = [True] * len(left_side) + [False] * len(right_side)
-            random.shuffle(row_order)
-
-            orders.append(row_order)
-            aisle.append(None)
-
-    for i in range(len(aisle)):
-        if orders[i]:
-            _shuffle_row(leftRows, rightRows, aisle, i, orders[i].pop())
-
-    return agents, {
-        "leftRows": leftRows,
-        "rightRows": rightRows,
-        "orders": orders,
-        "aisle": aisle,
-    }
-
-class SceneController:
-    def __init__(self, agents, meta):
-        self.leftRows, self.rightRows = meta["leftRows"], meta["rightRows"]
-        self.orders, self.aisle = meta["orders"], meta["aisle"]
-        self.rowNum = len(self.aisle) - 1
-
-    def update(self, agents):
-        if self.rowNum >= 0:
-            agentInAisle = self.aisle[self.rowNum]
-            if not agentInAisle and self.orders[self.rowNum]:
-                _shuffle_row(self.leftRows, self.rightRows, self.aisle, self.rowNum, self.orders[self.rowNum].pop())
-            agentInAisle = self.aisle[self.rowNum]
-            if agentInAisle:
-                if abs(agentInAisle.position.x - _AISLE_X) < 5:
-                    # Continue through the door before despawning.
-                    agentInAisle.target.y = _FINAL_GOAL.y 
-                    agentInAisle.state = "EXITING"
-                    self.aisle[self.rowNum] = None
-                else:
-                    agentInAisle.state = "TO_AISLE"
-                    agentInAisle.target.x = _AISLE_X
-            elif not self.orders[self.rowNum]:
-                self.rowNum -= 1
-
-        for agent in agents:
-            if getattr(agent, "state", None) == "EXITING":
-                # Vanish instantly at the door line
-                if agent.position.y >= _EXIT_Y:
-                    agent.state = "EXITED"
-                # Keep them locked in the aisle while inside
-                elif agent.position.y < _EXIT_Y:
-                    agent.position.x = max(min(agent.position.x, 310), 290)       
-                                 
 if __name__ == "__main__":
     import pygame
-    from core.physics import update_agent
+
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     clock = pygame.time.Clock()
-    walls = build_walls(); agents, meta = build_agents(); controller = SceneController(agents, meta)
-    while True:
-        if any(event.type == pygame.QUIT for event in pygame.event.get()): break
-        controller.update(agents)
-        for agent in agents: update_agent(agent, agents, TIMESTEP)
-        for agent in agents:
-            for wall in walls: wall.collision_resolve(agent)
+    walls = build_walls()
+    agents, _ = build_agents()
+    running = True
+
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+
+        states = [extract_state(agent, agents) for agent in agents]
+        actions = [expert_action(state) for state in states]
+        advance_velocity_agents(agents, actions, walls, TIMESTEP)
+        agents = [agent for agent in agents if filter_agent(agent)]
+
         screen.fill((30, 30, 30))
-        for wall in walls: pygame.draw.rect(screen, (200, 200, 200), wall.rect)
-        for agent in agents: pygame.draw.circle(screen, (0, 255, 0), (int(agent.position.x), int(agent.position.y)), int(agent.radius))
-        pygame.display.flip(); clock.tick(60)
+        for wall in walls:
+            pygame.draw.rect(screen, (200, 200, 200), wall.rect)
+        for agent in agents:
+            pygame.draw.circle(
+                screen,
+                (0, 255, 0),
+                (int(agent.position.x), int(agent.position.y)),
+                int(agent.radius),
+            )
+        pygame.display.flip()
+        clock.tick(60)
+
     pygame.quit()

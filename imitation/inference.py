@@ -22,6 +22,8 @@ import torch.nn as nn
 import pygame
 from pygame.math import Vector2
 
+from core.physics import advance_velocity_agents
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--scene", required=True, help="Scene name")
 parser.add_argument("--alpha", type=float, default=1.0,
@@ -61,6 +63,12 @@ parser.add_argument(
     default=42,
     help="Random seed used to build a reproducible scene (default: 42).",
 )
+parser.add_argument(
+    "--device",
+    choices=("cpu", "cuda", "auto"),
+    default="cpu",
+    help="Inference device. CPU is fastest for these small per-frame batches.",
+)
 args = parser.parse_args()
 
 random.seed(args.seed)
@@ -76,17 +84,15 @@ EXPORTING = args.export_json is not None
 
 class BCPolicy(nn.Module):
     """Must match training architecture exactly (incl. tanh on output)."""
-    def __init__(self, state_dim, action_dim, hidden_dim):
+    def __init__(self, state_dim, action_dim, hidden_dims):
         super().__init__()
-        self.trunk = nn.Sequential(
-            nn.Linear(state_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, action_dim),
-        )
+        layers = []
+        input_dim = state_dim
+        for hidden_dim in hidden_dims:
+            layers.extend((nn.Linear(input_dim, hidden_dim), nn.ReLU()))
+            input_dim = hidden_dim
+        layers.append(nn.Linear(input_dim, action_dim))
+        self.trunk = nn.Sequential(*layers)
 
     def forward(self, x):
         return torch.tanh(self.trunk(x))
@@ -102,7 +108,16 @@ action_std  = stats["action_std"]
 STATE_DIM  = len(state_mean)
 ACTION_DIM = len(action_mean)
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+if args.device == "cuda" and not torch.cuda.is_available():
+    raise SystemExit("CUDA was requested but is not available")
+device = torch.device(
+    "cuda"
+    if args.device == "cuda" or (args.device == "auto" and torch.cuda.is_available())
+    else "cpu"
+)
+if device.type == "cpu":
+    torch.set_num_threads(1)
+    torch.set_num_interop_threads(1)
 checkpoint = torch.load(
     os.path.join(DATA_DIR, "bc_policy.pt"),
     map_location=device,
@@ -116,19 +131,26 @@ if any(key.startswith("net.") for key in checkpoint):
         for key, value in checkpoint.items()
     }
 
-detected_hidden = checkpoint["trunk.0.weight"].shape[0]
-HIDDEN_DIM = args.hidden or detected_hidden
-if HIDDEN_DIM != detected_hidden:
+weight_keys = sorted(
+    (key for key in checkpoint if key.startswith("trunk.") and key.endswith(".weight")),
+    key=lambda key: int(key.split(".")[1]),
+)
+detected_hidden_dims = tuple(checkpoint[key].shape[0] for key in weight_keys[:-1])
+hidden_dims = (
+    (args.hidden,) * len(detected_hidden_dims)
+    if args.hidden is not None else detected_hidden_dims
+)
+if hidden_dims != detected_hidden_dims:
     raise ValueError(
-        f"--hidden={HIDDEN_DIM} does not match checkpoint width "
-        f"{detected_hidden}."
+        f"--hidden={args.hidden} does not match checkpoint dimensions "
+        f"{detected_hidden_dims}."
     )
 
-model = BCPolicy(STATE_DIM, ACTION_DIM, HIDDEN_DIM).to(device)
+model = BCPolicy(STATE_DIM, ACTION_DIM, hidden_dims).to(device)
 model.load_state_dict(checkpoint)
 model.eval()
 print(f"Model loaded  (STATE_DIM={STATE_DIM}, ACTION_DIM={ACTION_DIM}, "
-      f"hidden={HIDDEN_DIM}, alpha={ALPHA})")
+      f"hidden={hidden_dims}, alpha={ALPHA})")
 
 # Run
 screen = None
@@ -141,7 +163,14 @@ if not EXPORTING:
 
 walls = scene.build_walls()
 agents, meta = scene.build_agents(count=args.count)
-controller = scene.SceneController(agents, meta)
+controller_factory = getattr(scene, "build_controller", None)
+controller_class = getattr(scene, "SceneController", None)
+if controller_factory is not None:
+    controller = controller_factory(agents, meta)
+elif controller_class is not None:
+    controller = controller_class(agents, meta)
+else:
+    controller = None
 initial_agent_count = len(agents)
 
 prev_velocities = {}
@@ -160,7 +189,8 @@ while running:
                     pause = not pause
 
     if not pause:
-        controller.update(agents)
+        if controller is not None:
+            controller.update(agents)
         agents = [agent for agent in agents if scene.filter_agent(agent)]
 
         if agents:
@@ -179,6 +209,7 @@ while running:
 
             predictions = normalized_actions * action_std + action_mean
 
+            velocities = []
             for agent, prediction in zip(agents, predictions):
                 previous = prev_velocities.get(agent.id, prediction)
                 blended = ALPHA * prediction + (1.0 - ALPHA) * previous
@@ -186,18 +217,20 @@ while running:
 
                 velocity = Vector2(float(blended[0]), float(blended[1]))
 
-                # Match the stationary threshold used by train_bc.py.
-                if velocity.length() < 0.5:
+                stop_threshold = getattr(scene, "POLICY_STOP_THRESHOLD", 0.5)
+                if velocity.length() < stop_threshold:
                     velocity = Vector2(0, 0)
                 if velocity.length() > agent.max_speed:
                     velocity = velocity.normalize() * agent.max_speed
+                velocities.append(velocity)
 
-                agent.velocity = velocity
-                agent.position += agent.velocity * scene.TIMESTEP
-
-        for agent in agents:
-            for wall in walls:
-                wall.collision_resolve(agent)
+            advance_velocity_agents(
+                agents,
+                velocities,
+                walls,
+                scene.TIMESTEP,
+            )
+            agents = [agent for agent in agents if scene.filter_agent(agent)]
 
         frame_count += 1
 
