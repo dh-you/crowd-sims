@@ -84,11 +84,11 @@ def balance_phase_indices(indices, phases, samples_per_phase, seed):
     return result
 
 
-def action_regime_labels(actions):
+def action_regime_labels(actions, threshold=0.5):
     """Classify demonstrations as stationary, lateral, or forward."""
     speeds = np.linalg.norm(actions, axis=1)
     groups = np.zeros(len(actions), dtype=np.int8)
-    moving = speeds >= 0.5
+    moving = speeds >= threshold
     lateral = moving & (np.abs(actions[:, 0]) >= np.abs(actions[:, 1]))
     forward = moving & ~lateral
     groups[lateral] = 1
@@ -198,15 +198,68 @@ def main():
     parser.add_argument("--validation_fraction", type=float, default=0.2)
     parser.add_argument("--samples_per_phase", type=int, default=30000)
     parser.add_argument("--validation_samples_per_phase", type=int, default=20000)
-    parser.add_argument("--waiting_weight", type=float, default=1.0)
+    parser.add_argument(
+        "--waiting_weight",
+        type=float,
+        default=None,
+        help="Stationary-target loss weight (defaults to the scene setting).",
+    )
     parser.add_argument("--motion_weight", type=float, default=5.0)
-    parser.add_argument("--aisle_vertical_weight", type=float, default=10.0)
+    parser.add_argument("--aisle_vertical_weight", type=float, default=None)
     parser.add_argument("--patience", type=int, default=20)
     parser.add_argument("--candidate", action="store_true",
                         help="Read and write candidate artifacts for gated promotion.")
+    parser.add_argument(
+        "--artifact-tag",
+        default=None,
+        help="Optional candidate data/checkpoint suffix, such as 'heterogeneous'.",
+    )
+    parser.add_argument(
+        "--output-tag",
+        default=None,
+        help="Optional candidate output suffix when reusing a differently tagged dataset.",
+    )
+    parser.add_argument(
+        "--ablate-state",
+        default=None,
+        help="Drop one named observation after generating full expert labels.",
+    )
     args = parser.parse_args()
 
     scene = importlib.import_module(f"scenes.{args.scene}")
+    if args.artifact_tag and not args.candidate:
+        parser.error("--artifact-tag requires --candidate")
+    if args.artifact_tag and not args.artifact_tag.replace("_", "").isalnum():
+        parser.error("--artifact-tag may contain only letters, digits, and underscores")
+    if args.output_tag and not args.candidate:
+        parser.error("--output-tag requires --candidate")
+    if args.output_tag and not args.output_tag.replace("_", "").isalnum():
+        parser.error("--output-tag may contain only letters, digits, and underscores")
+    state_names = tuple(getattr(scene, "STATE_NAMES", ()))
+    if args.ablate_state is not None:
+        if not args.candidate:
+            parser.error("--ablate-state requires --candidate")
+        if args.ablate_state not in state_names:
+            parser.error(
+                "--ablate-state must be one of: " + ", ".join(state_names)
+            )
+        state_projector = getattr(scene, "project_state_observations", None)
+        if state_projector is None:
+            parser.error("scene does not support named state ablations")
+    else:
+        state_projector = None
+
+    def project_states(values):
+        if state_projector is None:
+            return values
+        return state_projector(values, args.ablate_state)
+
+    if args.waiting_weight is None:
+        # Airplane uses a safety-first stop penalty; legacy scenes retain 1.0.
+        args.waiting_weight = getattr(scene, "WAITING_WEIGHT", 1.0)
+    if args.aisle_vertical_weight is None:
+        args.aisle_vertical_weight = getattr(scene, "CROSS_AXIS_WEIGHT", 10.0)
+    action_regime_threshold = getattr(scene, "ACTION_REGIME_THRESHOLD", 0.5)
     configured_hidden_dims = tuple(
         getattr(scene, "POLICY_HIDDEN_DIMS", (64, 64, 64))
     )
@@ -216,17 +269,24 @@ def main():
     )
 
     data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), args.scene)
-    suffix = ".candidate" if args.candidate else ""
-    data_path = os.path.join(data_dir, f"expert_data{suffix}.npz")
+    source_suffix = ".candidate" if args.candidate else ""
+    if args.artifact_tag:
+        source_suffix += f".{args.artifact_tag}"
+    artifact_suffix = (
+        f".candidate.{args.output_tag}" if args.output_tag else source_suffix
+    )
+    if args.ablate_state is not None:
+        artifact_suffix += f".no_{args.ablate_state}"
+    data_path = os.path.join(data_dir, f"expert_data{source_suffix}.npz")
     print(f"Loading {data_path}...")
     data = np.load(data_path)
-    states = data["states"]
+    states = project_states(data["states"])
     actions = data["actions"]
     has_phase_labels = "phases" in data and np.any(data["phases"] >= 0)
     if has_phase_labels:
         groups = data["phases"]
     elif getattr(scene, "BALANCE_ACTION_REGIMES", False):
-        groups = action_regime_labels(actions)
+        groups = action_regime_labels(actions, action_regime_threshold)
     else:
         groups = np.full(len(states), -1, dtype=np.int8)
     use_action_weights = (
@@ -261,7 +321,7 @@ def main():
         "action_mean": action_mean,
         "action_std": action_std,
     }
-    stats_path = os.path.join(data_dir, f"norm_stats{suffix}.npy")
+    stats_path = os.path.join(data_dir, f"norm_stats{artifact_suffix}.npy")
     np.save(stats_path, stats)
 
     states_norm = (states - state_mean) / state_std
@@ -292,15 +352,44 @@ def main():
             synthetic_per_regime,
             np.random.default_rng(44),
         )
+        synthetic_states = project_states(synthetic_states)
         synthetic_states = (synthetic_states - state_mean) / state_std
         synthetic_actions = (synthetic_actions - action_mean) / action_std
-        synthetic_groups = action_regime_labels(synthetic_actions)
+        synthetic_groups = action_regime_labels(
+            synthetic_actions,
+            action_regime_threshold / max(float(action_std.max()), 1e-8),
+        )
         train_state_values = np.concatenate((train_state_values, synthetic_states))
         train_action_values = np.concatenate((train_action_values, synthetic_actions))
         train_group_values = np.concatenate((train_group_values, synthetic_groups))
         print(
             f"Added {len(synthetic_states)} state-only synthetic expert examples "
             f"({synthetic_per_regime} per action regime)."
+        )
+
+    boundary_sampler = getattr(scene, "sample_boundary_training_examples", None)
+    boundary_per_side = getattr(scene, "SYNTHETIC_BOUNDARY_SAMPLES_PER_SIDE", 0)
+    bottom_row_repeats = getattr(scene, "SYNTHETIC_BOTTOM_ROW_REPEATS", 0)
+    if boundary_sampler is not None and boundary_per_side > 0:
+        boundary_states, boundary_actions = boundary_sampler(
+            boundary_per_side,
+            bottom_row_repeats,
+            np.random.default_rng(45),
+        )
+        boundary_states = project_states(boundary_states)
+        boundary_states = (boundary_states - state_mean) / state_std
+        boundary_actions = (boundary_actions - action_mean) / action_std
+        boundary_groups = action_regime_labels(
+            boundary_actions,
+            action_regime_threshold / max(float(action_std.max()), 1e-8),
+        )
+        train_state_values = np.concatenate((train_state_values, boundary_states))
+        train_action_values = np.concatenate((train_action_values, boundary_actions))
+        train_group_values = np.concatenate((train_group_values, boundary_groups))
+        print(
+            f"Added {len(boundary_states)} threshold and bottom-row expert examples "
+            f"({boundary_per_side} per threshold side, "
+            f"{bottom_row_repeats} bottom-row repeats)."
         )
 
     train_dataset = CrowdDataset(
@@ -402,7 +491,7 @@ def main():
             best_overall_state = best_seed_state
             best_seed = seed
 
-    output_path = os.path.join(data_dir, f"bc_policy{suffix}.pt")
+    output_path = os.path.join(data_dir, f"bc_policy{artifact_suffix}.pt")
     torch.save(best_overall_state, output_path)
     print(
         f"Best seed={best_seed}, weighted validation loss={best_overall_score:.6f} "

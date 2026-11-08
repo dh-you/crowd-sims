@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import argparse
 import importlib
+import inspect
 import numpy as np
 import pygame
 from core.physics import advance_velocity_agents, update_agent
@@ -41,9 +42,18 @@ parser.add_argument("--episode_cap", type=int, default=None,
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--candidate", action="store_true",
                     help="Write expert_data.candidate.npz instead of replacing production data.")
+parser.add_argument(
+    "--artifact-tag",
+    default=None,
+    help="Optional candidate suffix, for example 'heterogeneous'.",
+)
 parser.add_argument("--headless", action="store_true",
                     help="Disable the collection window and frame-rate limit.")
 args = parser.parse_args()
+if args.artifact_tag and not args.candidate:
+    parser.error("--artifact-tag requires --candidate")
+if args.artifact_tag and not args.artifact_tag.replace("_", "").isalnum():
+    parser.error("--artifact-tag may contain only letters, digits, and underscores")
 
 scene = importlib.import_module(f"scenes.{args.scene}")
 random.seed(args.seed)
@@ -79,7 +89,10 @@ print(f"Collecting data for '{args.scene}' "
 while running and episode < args.episodes and (args.frames <= 0 or frame < args.frames):
     episode += 1
     walls = scene.build_walls()
-    agents, meta = scene.build_agents()
+    build_kwargs = {}
+    if "seed" in inspect.signature(scene.build_agents).parameters:
+        build_kwargs["seed"] = args.seed + episode - 1
+    agents, meta = scene.build_agents(**build_kwargs)
     initialize_episode = getattr(scene, "initialize_training_episode", None)
     if initialize_episode is not None:
         initialize_episode(agents, random)
@@ -139,7 +152,17 @@ while running and episode < args.episodes and (args.frames <= 0 or frame < args.
         direct_expert = getattr(scene, "expert_action", None)
         if direct_expert is not None:
             active_agents = [agent for agent in agents if agent.id in pre_states]
-            actions = [direct_expert(pre_states[agent.id]) for agent in active_agents]
+            canonical_actions = [
+                direct_expert(pre_states[agent.id]) for agent in active_agents
+            ]
+            action_scaler = getattr(scene, "scale_action_for_agent", None)
+            actions = (
+                [
+                    action_scaler(agent, action)
+                    for agent, action in zip(active_agents, canonical_actions)
+                ]
+                if action_scaler is not None else canonical_actions
+            )
             advance_velocity_agents(
                 active_agents,
                 actions,
@@ -216,7 +239,10 @@ if not args.headless:
 if not states_list:
     raise RuntimeError("No complete episodes were collected; no dataset was written.")
 
-filename = "expert_data.candidate.npz" if args.candidate else "expert_data.npz"
+suffix = ".candidate" if args.candidate else ""
+if args.artifact_tag:
+    suffix += f".{args.artifact_tag}"
+filename = f"expert_data{suffix}.npz"
 out_path = os.path.join(DATA_DIR, filename)
 payload = dict(
     states=np.array(states_list, dtype=np.float32),

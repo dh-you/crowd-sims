@@ -25,4 +25,20 @@ class Wall:
             penetration = agent.radius - dist
             agent.position += push.normalize() * penetration
         elif dist == 0:
-            agent.position += Vector2(agent.radius, 0)
+            # The center is inside the rectangle, so the closest-point normal
+            # is undefined. Use the minimum geometric translation instead of
+            # an unconditional rightward push. Incoming motion breaks ties.
+            candidates = [
+                Vector2(self.rect.left - agent.radius - agent.position.x, 0),
+                Vector2(self.rect.right + agent.radius - agent.position.x, 0),
+                Vector2(0, self.rect.top - agent.radius - agent.position.y),
+                Vector2(0, self.rect.bottom + agent.radius - agent.position.y),
+            ]
+            minimum = min(candidate.length_squared() for candidate in candidates)
+            tied = [
+                candidate
+                for candidate in candidates
+                if abs(candidate.length_squared() - minimum) <= 1e-9
+            ]
+            correction = min(tied, key=lambda candidate: candidate.dot(agent.velocity))
+            agent.position += correction

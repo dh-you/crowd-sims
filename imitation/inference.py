@@ -5,6 +5,7 @@ Usage:
     python inference.py --scene airplane
     python inference.py --scene queue
     python inference.py --scene airplane --alpha 0.7
+    python inference.py --scene airplane --candidate
     python inference.py --scene airplane --export-json
 """
 
@@ -14,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import argparse
 import importlib
+import inspect
 import json
 import random
 import numpy as np
@@ -69,7 +71,30 @@ parser.add_argument(
     default="cpu",
     help="Inference device. CPU is fastest for these small per-frame batches.",
 )
+parser.add_argument(
+    "--candidate",
+    action="store_true",
+    help="Load unpromoted candidate artifacts for visual inspection.",
+)
+parser.add_argument(
+    "--artifact-tag",
+    default=None,
+    help="Load a tagged candidate such as 'heterogeneous'; requires --candidate.",
+)
+parser.add_argument(
+    "--layout",
+    default=None,
+    help="Airplane layout such as 3x3, 3x4, or 3x4x3 (airplane scene only).",
+)
+parser.add_argument(
+    "--occupancy",
+    type=float,
+    default=None,
+    help="Seeded airplane occupancy fraction in (0, 1]; cannot be combined with --count.",
+)
 args = parser.parse_args()
+if args.artifact_tag and not args.candidate:
+    parser.error("--artifact-tag requires --candidate")
 
 random.seed(args.seed)
 np.random.seed(args.seed)
@@ -78,6 +103,9 @@ torch.manual_seed(args.seed)
 scene = importlib.import_module(f"scenes.{args.scene}")
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), args.scene)
+ARTIFACT_SUFFIX = ".candidate" if args.candidate else ""
+if args.artifact_tag:
+    ARTIFACT_SUFFIX += f".{args.artifact_tag}"
 ALPHA = args.alpha
 EXPORTING = args.export_json is not None
 
@@ -99,7 +127,10 @@ class BCPolicy(nn.Module):
 
 
 # Load model and normalisation stats
-stats = np.load(os.path.join(DATA_DIR, "norm_stats.npy"), allow_pickle=True).item()
+stats = np.load(
+    os.path.join(DATA_DIR, f"norm_stats{ARTIFACT_SUFFIX}.npy"),
+    allow_pickle=True,
+).item()
 state_mean  = stats["state_mean"]
 state_std   = stats["state_std"]
 action_mean = stats["action_mean"]
@@ -119,7 +150,7 @@ if device.type == "cpu":
     torch.set_num_threads(1)
     torch.set_num_interop_threads(1)
 checkpoint = torch.load(
-    os.path.join(DATA_DIR, "bc_policy.pt"),
+    os.path.join(DATA_DIR, f"bc_policy{ARTIFACT_SUFFIX}.pt"),
     map_location=device,
     weights_only=True,
 )
@@ -161,8 +192,22 @@ if not EXPORTING:
     clock = pygame.time.Clock()
     pygame.display.set_caption(f"BC Inference: {args.scene}")
 
-walls = scene.build_walls()
-agents, meta = scene.build_agents(count=args.count)
+if (args.layout is not None or args.occupancy is not None) and args.scene != "airplane":
+    raise SystemExit("--layout and --occupancy are available only for airplane")
+if args.layout is not None or args.occupancy is not None:
+    walls = scene.build_walls(args.layout)
+    agents, meta = scene.build_agents(
+        count=args.count,
+        layout=args.layout,
+        occupancy=args.occupancy,
+        seed=args.seed,
+    )
+else:
+    walls = scene.build_walls()
+    build_kwargs = {"count": args.count}
+    if "seed" in inspect.signature(scene.build_agents).parameters:
+        build_kwargs["seed"] = args.seed
+    agents, meta = scene.build_agents(**build_kwargs)
 controller_factory = getattr(scene, "build_controller", None)
 controller_class = getattr(scene, "SceneController", None)
 if controller_factory is not None:
@@ -210,16 +255,25 @@ while running:
             predictions = normalized_actions * action_std + action_mean
 
             velocities = []
-            for agent, prediction in zip(agents, predictions):
+            action_cleaner = getattr(scene, "clean_policy_action", None)
+            action_scaler = getattr(scene, "scale_action_for_agent", None)
+            for agent, state, prediction in zip(agents, states, predictions):
                 previous = prev_velocities.get(agent.id, prediction)
                 blended = ALPHA * prediction + (1.0 - ALPHA) * previous
                 prev_velocities[agent.id] = blended
 
                 velocity = Vector2(float(blended[0]), float(blended[1]))
 
-                stop_threshold = getattr(scene, "POLICY_STOP_THRESHOLD", 0.5)
-                if velocity.length() < stop_threshold:
-                    velocity = Vector2(0, 0)
+                if action_cleaner is not None:
+                    cleaned = action_cleaner(state, velocity)
+                    velocity = Vector2(float(cleaned[0]), float(cleaned[1]))
+                else:
+                    stop_threshold = getattr(scene, "POLICY_STOP_THRESHOLD", 0.5)
+                    if velocity.length() < stop_threshold:
+                        velocity = Vector2(0, 0)
+                if action_scaler is not None:
+                    scaled = action_scaler(agent, velocity)
+                    velocity = Vector2(float(scaled[0]), float(scaled[1]))
                 if velocity.length() > agent.max_speed:
                     velocity = velocity.normalize() * agent.max_speed
                 velocities.append(velocity)

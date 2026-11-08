@@ -20,10 +20,13 @@ from train_bc import BCPolicy, split_indices
 
 CSV_FIELDS = (
     "variant",
+    "layout",
+    "occupancy",
     "seed",
     "count",
     "complete",
     "frames",
+    "blocked_departures",
     "contacts",
     "max_penetration",
     "max_row_drift",
@@ -94,7 +97,14 @@ def validate_dataset(data, stats):
         raise AssertionError("training and validation episodes overlap")
 
 
-def policy_actions(model, stats, device, states, force_row_clear=False):
+def policy_actions(
+    model,
+    stats,
+    device,
+    states,
+    force_row_clear=False,
+    cleanup_states=None,
+):
     inputs = np.array(states, dtype=np.float32, copy=True)
     if force_row_clear:
         inputs[:, 1] = 1.0
@@ -102,18 +112,151 @@ def policy_actions(model, stats, device, states, force_row_clear=False):
     with torch.no_grad():
         outputs = model(torch.from_numpy(normalized).to(device)).cpu().numpy()
     predictions = outputs * stats["action_std"] + stats["action_mean"]
-    stop_threshold = getattr(scene, "POLICY_STOP_THRESHOLD", 0.5)
-    predictions[np.linalg.norm(predictions, axis=1) < stop_threshold] = 0.0
+    if cleanup_states is None and inputs.shape[1] == scene.STATE_DIM:
+        cleanup_states = inputs
+    action_cleaner = getattr(scene, "clean_policy_action", None)
+    if action_cleaner is not None and cleanup_states is not None:
+        predictions = np.asarray(
+            [
+                action_cleaner(state, action)
+                for state, action in zip(cleanup_states, predictions)
+            ],
+            dtype=np.float32,
+        )
+    else:
+        stop_threshold = getattr(scene, "POLICY_STOP_THRESHOLD", 0.5)
+        predictions[np.linalg.norm(predictions, axis=1) < stop_threshold] = 0.0
     return predictions
 
 
-def rollout(variant, count, seed, max_frames, model=None, stats=None, device=None):
+def action_matches_expert_regime(state, action):
+    """Check stop/move regime and movement direction after inference thresholding."""
+    action = np.asarray(action, dtype=np.float32)
+    expected = scene.expert_action(state)
+    stop_threshold = getattr(scene, "POLICY_STOP_THRESHOLD", 0.5)
+
+    if np.linalg.norm(expected) < stop_threshold:
+        return np.linalg.norm(action) < stop_threshold
+    if np.linalg.norm(action) < stop_threshold:
+        return False
+
+    if abs(float(expected[0])) >= abs(float(expected[1])):
+        return (
+            abs(float(action[0])) >= abs(float(action[1]))
+            and np.sign(action[0]) == np.sign(expected[0])
+        )
+    return (
+        abs(float(action[1])) > abs(float(action[0]))
+        and np.sign(action[1]) == np.sign(expected[1])
+    )
+
+
+def candidate_boundary_cases():
+    """Return threshold states plus the exact bottom-row merge configuration."""
+    cases = [
+        (
+            "row_blocked",
+            np.array([0.5, scene.ROW_SAFE - 0.001, 1.0, 1.0], dtype=np.float32),
+        ),
+        (
+            "right_merge_yields",
+            np.array([-1.0 / 3.0, 1.0, scene.MERGE_SAFE - 0.001, 1.0], dtype=np.float32),
+        ),
+        (
+            "left_merge_priority",
+            np.array([1.0 / 3.0, 1.0, scene.MERGE_SAFE - 0.001, 1.0], dtype=np.float32),
+        ),
+        (
+            "forward_blocked",
+            np.array([0.0, 1.0, 1.0, scene.FOLLOW_SAFE - 0.001], dtype=np.float32),
+        ),
+        (
+            "forward_clear",
+            np.array([0.0, 1.0, 1.0, scene.FOLLOW_SAFE], dtype=np.float32),
+        ),
+    ]
+    bottom_row_agents, _ = scene.build_agents(count=6)
+    for agent in bottom_row_agents:
+        cases.append(
+            (
+                f"bottom_row_agent_{agent.id}",
+                scene.extract_state(agent, bottom_row_agents),
+            )
+        )
+    return cases
+
+
+def validate_candidate_boundaries(model, stats, device):
+    """Fail closed when the candidate misses a local expert decision boundary."""
+    cases = candidate_boundary_cases()
+    states = np.asarray([state for _, state in cases], dtype=np.float32)
+    actions = policy_actions(model, stats, device, states)
+    failures = [
+        (name, state, action, scene.expert_action(state))
+        for (name, state), action in zip(cases, actions)
+        if not action_matches_expert_regime(state, action)
+    ]
+    if failures:
+        details = "; ".join(
+            f"{name}: candidate={action.round(3).tolist()} "
+            f"expert={expected.tolist()}"
+            for name, _, action, expected in failures
+        )
+        raise AssertionError(f"candidate boundary check failed: {details}")
+    print(f"Candidate boundary check passed ({len(cases)} cases).")
+
+
+def count_blocked_departure_starts(agents, states, actions, started_departures):
+    """Record first meaningful aisleward starts that still have a row blocker."""
+    blocked_departures = 0
+    start_threshold = getattr(scene, "POLICY_STOP_THRESHOLD", 0.5)
+
+    for agent, state, action in zip(agents, states, actions):
+        if agent.id in started_departures:
+            continue
+
+        aisle_x = agent.getData("aisle_x")
+        if aisle_x is None:
+            aisle_x = scene.AISLE_X
+        aisle_direction = np.sign(aisle_x - agent.position.x)
+        lateral_speed = float(action[0]) * aisle_direction
+        if aisle_direction == 0.0 or lateral_speed < start_threshold:
+            continue
+
+        started_departures.add(agent.id)
+        if (
+            abs(float(state[0])) > scene.AISLE_EPS + 1e-6
+            and float(state[1]) < 1.0 - 1e-6
+        ):
+            blocked_departures += 1
+
+    return blocked_departures
+
+
+def rollout(
+    variant,
+    count,
+    seed,
+    max_frames,
+    model=None,
+    stats=None,
+    device=None,
+    layout=None,
+    occupancy=None,
+):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-    walls = scene.build_walls()
-    agents, _ = scene.build_agents(count=count)
+    layout = scene.parse_layout(layout)
+    walls = scene.build_walls(layout)
+    agents, _ = scene.build_agents(
+        count=count,
+        layout=layout,
+        occupancy=occupancy,
+        seed=seed,
+    )
+    initial_count = len(agents)
     rng = random.Random(seed)
     for agent in agents:
         agent.position += Vector2(rng.uniform(-1, 1), rng.uniform(-1, 1))
@@ -125,6 +268,8 @@ def rollout(variant, count, seed, max_frames, model=None, stats=None, device=Non
     last_motion_frame = 0
     stalled = False
     entered_aisle = set()
+    started_departures = set()
+    blocked_departures = 0
 
     for frame in range(1, max_frames + 1):
         states = np.asarray(
@@ -142,10 +287,25 @@ def rollout(variant, count, seed, max_frames, model=None, stats=None, device=Non
                 force_row_clear=variant == "row_clearance_1",
             )
 
+        blocked_departures += count_blocked_departure_starts(
+            agents,
+            states,
+            actions,
+            started_departures,
+        )
+
         before = [Vector2(agent.position) for agent in agents]
+        action_scaler = getattr(scene, "scale_action_for_agent", None)
+        physical_actions = (
+            [
+                action_scaler(agent, action)
+                for agent, action in zip(agents, actions)
+            ]
+            if action_scaler is not None else actions
+        )
         diagnostics = advance_velocity_agents(
             agents,
-            actions,
+            physical_actions,
             walls,
             scene.TIMESTEP,
         )
@@ -167,8 +327,11 @@ def rollout(variant, count, seed, max_frames, model=None, stats=None, device=Non
             last_motion_frame = frame
 
         for agent in agents:
+            aisle_x = agent.getData("aisle_x")
+            if aisle_x is None:
+                aisle_x = scene.AISLE_X
             inside_merge_zone = (
-                abs(agent.position.x - scene.AISLE_X)
+                abs(agent.position.x - aisle_x)
                 <= scene.AISLE_HALF_WIDTH + agent.radius + MERGE_ZONE_TOLERANCE
             )
             if inside_merge_zone:
@@ -188,10 +351,13 @@ def rollout(variant, count, seed, max_frames, model=None, stats=None, device=Non
 
     return {
         "variant": variant,
+        "layout": layout.label,
+        "occupancy": "" if occupancy is None else occupancy,
         "seed": seed,
-        "count": count,
+        "count": initial_count,
         "complete": not agents,
         "frames": frame,
+        "blocked_departures": blocked_departures,
         "contacts": contacts,
         "max_penetration": round(max_penetration, 6),
         "max_row_drift": round(max_row_drift, 6),
@@ -235,10 +401,25 @@ def promote(data_dir):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--counts", default="24,60,102")
+    parser.add_argument(
+        "--layouts",
+        default=None,
+        help="Comma-separated zero-shot layouts, for example 2x1,3x4,3x4x3.",
+    )
+    parser.add_argument(
+        "--occupancies",
+        default="0.5,0.75,1.0",
+        help="Comma-separated occupancy fractions used with --layouts.",
+    )
     parser.add_argument("--seeds", type=int, default=5)
     parser.add_argument("--max-frames", type=int, default=20000)
     parser.add_argument("--max-row-drift", type=float, default=6.0)
     parser.add_argument("--expert-only", action="store_true")
+    parser.add_argument(
+        "--boundary-check",
+        action="store_true",
+        help="Check candidate stop/go boundary decisions and exit without rollouts.",
+    )
     parser.add_argument("--promote", action="store_true")
     parser.add_argument("--csv", default=None)
     parser.add_argument("--device", choices=["cpu", "cuda"], default="cpu")
@@ -251,19 +432,42 @@ def main():
         torch.set_num_threads(1)
         torch.set_num_interop_threads(1)
     counts = [int(value) for value in args.counts.split(",")]
+    layouts = (
+        [scene.parse_layout(value.strip()) for value in args.layouts.split(",")]
+        if args.layouts else None
+    )
+    occupancies = [float(value) for value in args.occupancies.split(",")]
+    if any(not 0.0 < occupancy <= 1.0 for occupancy in occupancies):
+        raise SystemExit("every occupancy must be in (0, 1]")
+    if args.promote and layouts:
+        raise SystemExit("zero-shot layout evaluation cannot promote a candidate")
     data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "airplane")
     csv_path = args.csv or os.path.join(data_dir, "evaluation.csv")
 
     model = stats = None
-    variants = ("expert",) if args.expert_only else ("normal", "row_clearance_1")
+    if args.expert_only:
+        variants = ("expert",)
+    elif layouts:
+        variants = ("normal",)
+    else:
+        variants = ("normal", "row_clearance_1")
     if not args.expert_only:
         data_dir, data, stats, model = load_candidate(device)
         validate_dataset(data, stats)
+    if args.boundary_check:
+        if args.expert_only:
+            raise SystemExit("--boundary-check requires a candidate policy")
+        validate_candidate_boundaries(model, stats, device)
+        return
 
     rows = []
     failures = []
     for variant in variants:
-        for count in counts:
+        scenarios = (
+            [(layout, occupancy, None) for layout in layouts for occupancy in occupancies]
+            if layouts else [(scene.DEFAULT_LAYOUT, None, count) for count in counts]
+        )
+        for layout, occupancy, count in scenarios:
             for seed in range(args.seeds):
                 row = rollout(
                     variant,
@@ -273,21 +477,30 @@ def main():
                     model,
                     stats,
                     device,
+                    layout,
+                    occupancy,
                 )
                 rows.append(row)
                 print(
-                    f"{variant:16s} count={count:3d} seed={seed} "
+                    f"{variant:16s} layout={row['layout']:3s} "
+                    f"occupancy={row['occupancy'] or 'count':5} "
+                    f"count={row['count']:3d} seed={seed} "
                     f"complete={row['complete']} frames={row['frames']:5d} "
+                    f"blocked={row['blocked_departures']:3d} "
                     f"contacts={row['contacts']:5d} "
                     f"penetration={row['max_penetration']:.4f} "
                     f"drift={row['max_row_drift']:.4f} "
                     f"unresolved={row['unresolved_overlaps']} "
                     f"stalled={row['stalled']}"
                 )
-                if variant in ("expert", "normal") and not row_passes_gate(
-                    row,
-                    args.max_frames,
-                    args.max_row_drift,
+                if (
+                    not layouts
+                    and variant in ("expert", "normal")
+                    and not row_passes_gate(
+                        row,
+                        args.max_frames,
+                        args.max_row_drift,
+                    )
                 ):
                     failures.append(row)
 
@@ -296,7 +509,10 @@ def main():
     if failures:
         raise SystemExit(f"Gate failed for {len(failures)} rollout(s)")
 
-    print("Required rollout variants passed the Stage A gate.")
+    if layouts:
+        print("Zero-shot layout evaluation completed.")
+    else:
+        print("Required rollout variants passed the Stage A gate.")
     if args.promote:
         if args.expert_only:
             raise SystemExit("--promote requires candidate policy evaluation")
