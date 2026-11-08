@@ -1,5 +1,6 @@
 .venv
 venv_gpu_312
 __pycache__
-airplane
 queue
+.npz
+imitation/airplane/expert_data*.npz

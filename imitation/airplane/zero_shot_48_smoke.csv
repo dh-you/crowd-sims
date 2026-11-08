@@ -1,0 +1,5 @@
+variant,layout,occupancy,seed,count,complete,frames,blocked_departures,contacts,max_penetration,max_row_drift,unresolved_overlaps,stalled
+normal,2x1,1.0,0,51,True,7013,17,1156,0.21957,1.2612,0,False
+normal,2x2,1.0,0,68,True,8428,34,1734,0.219463,1.360575,0,False
+normal,3x2,1.0,0,85,True,9884,51,2347,0.219268,1.399038,0,False
+normal,3x4,1.0,0,119,True,12891,85,1694,0.219363,1.663468,0,False

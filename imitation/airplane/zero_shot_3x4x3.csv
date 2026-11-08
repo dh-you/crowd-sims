@@ -1,0 +1,16 @@
+variant,layout,occupancy,seed,count,complete,frames,blocked_departures,contacts,max_penetration,max_row_drift,unresolved_overlaps,stalled
+normal,3x4x3,0.5,0,85,True,6799,27,1713,0.227952,1.74408,0,False
+normal,3x4x3,0.5,1,85,True,6720,28,982,0.217485,1.430167,0,False
+normal,3x4x3,0.5,2,85,True,7037,30,741,0.213846,1.397376,0,False
+normal,3x4x3,0.5,3,85,True,7026,28,1148,0.218841,1.786641,0,False
+normal,3x4x3,0.5,4,85,True,6855,28,1465,0.220935,1.728795,0,False
+normal,3x4x3,0.75,0,128,True,8778,63,3894,0.223024,1.528256,0,False
+normal,3x4x3,0.75,1,128,True,8694,63,2514,0.222682,1.451505,0,False
+normal,3x4x3,0.75,2,128,True,8946,62,1390,0.219457,1.462398,0,False
+normal,3x4x3,0.75,3,128,True,8668,63,1867,0.219068,1.807264,0,False
+normal,3x4x3,0.75,4,128,True,9268,63,2078,0.22431,1.8095,0,False
+normal,3x4x3,1.0,0,170,True,10085,102,5624,0.223002,1.385562,0,False
+normal,3x4x3,1.0,1,170,True,10058,102,5084,0.223007,1.506874,0,False
+normal,3x4x3,1.0,2,170,True,10087,102,4905,0.219764,1.401547,0,False
+normal,3x4x3,1.0,3,170,True,10057,102,5474,0.222947,1.417525,0,False
+normal,3x4x3,1.0,4,170,True,10055,102,4605,0.221378,1.513176,0,False
