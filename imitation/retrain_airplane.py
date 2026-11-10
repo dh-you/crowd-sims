@@ -21,7 +21,6 @@ def main():
     args = parser.parse_args()
 
     root = os.path.dirname(os.path.abspath(__file__))
-    data_dir = os.path.join(root, "airplane")
     python = sys.executable
 
     run([
@@ -63,9 +62,11 @@ def main():
             "-u",
             os.path.join(root, "inference.py"),
             "--scene", "airplane",
+            "--layout", "3x3",
             "--count", "102",
             "--seed", "0",
-            "--export-json", os.path.join(data_dir, "airplane-102.json"),
+            "--export-json",
+            "--frame-stride", "5",
             "--max-frames", "20000",
         ])
 

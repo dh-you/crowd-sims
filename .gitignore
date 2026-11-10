@@ -4,3 +4,4 @@ __pycache__
 queue
 .npz
 imitation/airplane/expert_data*.npz
+data/replays/*.incomplete.json

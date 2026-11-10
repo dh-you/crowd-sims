@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import argparse
 import importlib
 import inspect
-import json
+import math
 import random
 import numpy as np
 import torch
@@ -25,6 +25,7 @@ import pygame
 from pygame.math import Vector2
 
 from core.physics import advance_velocity_agents
+from replay_export import capture_frame, write_web_replay
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--scene", required=True, help="Scene name")
@@ -51,7 +52,12 @@ parser.add_argument(
     default=None,
     metavar="PATH",
     help="Run without a window and export a web replay. If PATH is omitted, "
-         "writes data/replays/<scene>.json.",
+         "writes data/replays/<scene>-<layout>-<count>.json for airplanes "
+         "or data/replays/<scene>-<count>.json for other scenes.",
+)
+parser.add_argument(
+    "--frame-stride", type=int, default=1,
+    help="Record every N simulation steps while preserving playback duration.",
 )
 parser.add_argument(
     "--max-frames",
@@ -92,15 +98,34 @@ parser.add_argument(
     default=None,
     help="Seeded airplane occupancy fraction in (0, 1]; cannot be combined with --count.",
 )
+parser.add_argument("--preferred-speed-min", type=float, default=None,
+                    help="Airplane preferred-speed lower bound; provide both bounds.")
+parser.add_argument("--preferred-speed-max", type=float, default=None,
+                    help="Airplane preferred-speed upper bound; provide both bounds.")
 args = parser.parse_args()
 if args.artifact_tag and not args.candidate:
     parser.error("--artifact-tag requires --candidate")
+if args.frame_stride < 1:
+    parser.error("--frame-stride must be at least 1")
+if args.max_frames < 0:
+    parser.error("--max-frames must be nonnegative")
+speed_bounds = (args.preferred_speed_min, args.preferred_speed_max)
+if any(value is not None for value in speed_bounds):
+    if args.scene != "airplane":
+        parser.error("preferred-speed bounds are available only for airplane")
+    if any(value is None for value in speed_bounds):
+        parser.error("provide both --preferred-speed-min and --preferred-speed-max")
+    if (not all(math.isfinite(value) and value > 0 for value in speed_bounds)
+            or speed_bounds[0] > speed_bounds[1]):
+        parser.error("preferred-speed bounds must be finite, positive, and ordered")
 
 random.seed(args.seed)
 np.random.seed(args.seed)
 torch.manual_seed(args.seed)
 
 scene = importlib.import_module(f"scenes.{args.scene}")
+if args.preferred_speed_min is not None:
+    scene.PREFERRED_SPEED_MIN, scene.PREFERRED_SPEED_MAX = speed_bounds
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), args.scene)
 ARTIFACT_SUFFIX = ".candidate" if args.candidate else ""
@@ -222,7 +247,7 @@ prev_velocities = {}
 pause = False
 running = True
 frame_count = 0
-replay_frames = []
+replay_frames = [capture_frame(agents)] if EXPORTING else []
 
 while running:
     if not EXPORTING:
@@ -289,18 +314,13 @@ while running:
         frame_count += 1
 
         if EXPORTING:
-            replay_frames.append([
-                [
-                    agent.id,
-                    round(agent.position.x, 3),
-                    round(agent.position.y, 3),
-                    round(agent.radius, 3),
-                ]
-                for agent in agents
-            ])
             reached_safety_limit = (
                 args.max_frames > 0 and frame_count >= args.max_frames
             )
+            if frame_count % args.frame_stride == 0 or not agents or reached_safety_limit:
+                replay_frames.append(capture_frame(agents))
+            if frame_count % 1000 == 0:
+                print(f"  frame {frame_count}: {len(agents)} agents remain", flush=True)
             if not agents or reached_safety_limit:
                 running = False
 
@@ -319,64 +339,30 @@ while running:
         clock.tick(60)
 
 if EXPORTING:
-    output_path = args.export_json
-    using_default_path = not output_path
-    if not output_path:
-        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        output_path = os.path.join(
-            repo_root,
-            "data",
-            "replays",
-            f"{args.scene}-{initial_agent_count}.json",
-        )
-
     complete = len(agents) == 0
     replay = {
-        "version": 1,
+        "version": 2,
         "scene": args.scene,
         "agent_count": initial_agent_count,
         "width": scene.SCREEN_WIDTH,
         "height": scene.SCREEN_HEIGHT,
-        "fps": 60,
+        "fps": 60 / args.frame_stride,
+        "frame_stride": args.frame_stride,
+        "simulation_frames": frame_count,
         "complete": complete,
+        "checkpoint": f"bc_policy{ARTIFACT_SUFFIX}.pt",
+        "seed": args.seed,
         "walls": [
             [wall.rect.left, wall.rect.top, wall.rect.width, wall.rect.height]
             for wall in walls
         ],
         "frames": replay_frames,
     }
-
-    output_path = os.path.abspath(output_path)
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as output_file:
-        json.dump(replay, output_file, separators=(",", ":"))
-
-    if using_default_path and complete:
-        manifest_path = os.path.join(os.path.dirname(output_path), "manifest.json")
-        if os.path.exists(manifest_path):
-            with open(manifest_path, encoding="utf-8") as manifest_file:
-                manifest = json.load(manifest_file)
-        else:
-            manifest = {"version": 1, "replays": []}
-
-        entry = {
-            "scene": args.scene,
-            "count": initial_agent_count,
-            "file": os.path.basename(output_path),
-            "frames": len(replay_frames),
-        }
-        manifest["replays"] = [
-            item
-            for item in manifest["replays"]
-            if (item["scene"], item["count"])
-            != (entry["scene"], entry["count"])
-        ]
-        manifest["replays"].append(entry)
-        manifest["replays"].sort(key=lambda item: (item["scene"], item["count"]))
-
-        with open(manifest_path, "w", encoding="utf-8") as manifest_file:
-            json.dump(manifest, manifest_file, indent=2)
-            manifest_file.write("\n")
+    if args.scene == "airplane":
+        replay["layout"] = meta["layout"].label
+        replay["preferred_speed_range"] = [scene.PREFERRED_SPEED_MIN, scene.PREFERRED_SPEED_MAX]
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    output_path = write_web_replay(replay, repo_root, args.export_json or None)
 
     status = "complete" if complete else f"incomplete ({len(agents)} agents remain)"
     print(

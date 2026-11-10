@@ -49,12 +49,13 @@
       background: #1e1e1e;
     }
 
-    #status {
+    #status,
+    #details {
       min-height: 1.5rem;
       color: #bbb;
     }
   </style>
-  <script type="module" src="../js/replay.js"></script>
+  <script type="module" src="../js/replay.js?v=2"></script>
 </head>
 <body>
   <main>
@@ -63,6 +64,10 @@
         Scene
         <select id="scene"></select>
       </label>
+      <label id="layout-control" hidden>
+        Layout
+        <select id="layout"></select>
+      </label>
       <label>
         Agents
         <select id="count"></select>
@@ -70,7 +75,7 @@
       <button id="play" type="button">Pause</button>
       <button id="restart" type="button">Restart</button>
       <label>
-        Speed
+        Playback speed
         <select id="speed">
           <option value="0.5">0.5x</option>
           <option value="1" selected>1x</option>
@@ -82,6 +87,7 @@
     </div>
     <canvas id="simulation" width="600" height="600"></canvas>
     <p id="status">Loading replay…</p>
+    <p id="details" hidden></p>
   </main>
 </body>
 </html>
