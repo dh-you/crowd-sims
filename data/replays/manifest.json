@@ -5,56 +5,56 @@
       "scene": "airplane",
       "count": 51,
       "file": "airplane-2x1-51.json",
-      "frames": 4472,
+      "frames": 2223,
       "layout": "2x1"
     },
     {
       "scene": "airplane",
       "count": 68,
       "file": "airplane-2x2-68.json",
-      "frames": 5759,
+      "frames": 2863,
       "layout": "2x2"
     },
     {
       "scene": "airplane",
       "count": 85,
       "file": "airplane-3x2-85.json",
-      "frames": 7079,
+      "frames": 3523,
       "layout": "3x2"
     },
     {
       "scene": "airplane",
       "count": 24,
       "file": "airplane-3x3-24.json",
-      "frames": 2777,
+      "frames": 1379,
       "layout": "3x3"
     },
     {
       "scene": "airplane",
       "count": 60,
       "file": "airplane-3x3-60.json",
-      "frames": 5622,
+      "frames": 2805,
       "layout": "3x3"
     },
     {
       "scene": "airplane",
       "count": 102,
       "file": "airplane-3x3-102.json",
-      "frames": 8407,
+      "frames": 4172,
       "layout": "3x3"
     },
     {
       "scene": "airplane",
       "count": 119,
       "file": "airplane-3x4-119.json",
-      "frames": 9742,
+      "frames": 4833,
       "layout": "3x4"
     },
     {
       "scene": "airplane",
       "count": 170,
       "file": "airplane-3x4x3-170.json",
-      "frames": 7254,
+      "frames": 3611,
       "layout": "3x4x3"
     },
     {

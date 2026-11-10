@@ -96,7 +96,7 @@ For airplanes, the viewer has separate **Layout** and **Agents** selectors.
 Supported seating configurations are 2–1, 2–2, 3–2, 3–3, 3–4, and the two-aisle
 3–4–3 cabin. The airplane recordings listed in the catalog use the existing
 `heterogeneous_closer` learned checkpoint, seed 42, and preferred speeds sampled
-uniformly from 1.5–3.5, matching the latest GIF. No retraining is required.
+uniformly from 3–7. No retraining is required.
 
 For example, open
 <http://localhost:1337/pages/replay.html?scene=airplane&layout=3x4x3&count=170>.
@@ -107,7 +107,7 @@ does not update an existing recording.
 Export or replace a specific learned-model replay with:
 
 ```powershell
-python imitation\inference.py --scene airplane --layout 2x2 --candidate --artifact-tag heterogeneous_closer --preferred-speed-min 1.5 --preferred-speed-max 3.5 --frame-stride 5 --export-json
+python imitation\inference.py --scene airplane --layout 2x2 --candidate --artifact-tag heterogeneous_closer --preferred-speed-min 3 --preferred-speed-max 7 --frame-stride 5 --export-json
 ```
 
 Omit `--count` to fill the selected cabin, or specify a smaller passenger count.
@@ -121,7 +121,7 @@ To export every full cabin using the same checkpoint and speed range:
 
 ```powershell
 "2x1", "2x2", "3x2", "3x3", "3x4", "3x4x3" | ForEach-Object {
-    python imitation\inference.py --scene airplane --layout $_ --candidate --artifact-tag heterogeneous_closer --preferred-speed-min 1.5 --preferred-speed-max 3.5 --frame-stride 5 --export-json
+    python imitation\inference.py --scene airplane --layout $_ --candidate --artifact-tag heterogeneous_closer --preferred-speed-min 3 --preferred-speed-max 7 --frame-stride 5 --export-json
 }
 ```
 

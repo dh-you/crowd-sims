@@ -107,7 +107,7 @@ class ReplayBrowserTests(unittest.TestCase):
             with self.subTest(layout=layout):
                 self.page.select_option("#layout", layout)
                 self.wait_for_run(layout, count)
-                self.assertIn("1.5–3.5", self.page.locator("#details").inner_text())
+                self.assertIn("3–7", self.page.locator("#details").inner_text())
                 self.page.locator("#timeline").evaluate(
                     "slider => { slider.value = slider.max; slider.dispatchEvent(new Event('input')); }"
                 )
